@@ -390,10 +390,10 @@ body.paused #practice .feedback {
 .hints-off .kc { display: none; }
 
 /* Prestige scaffold fading, least consequential first: stroke/key-name labels in the word
-   stream fade before anything else. Always just a default - the "Stroke labels" checkbox
-   overrides this by never applying the class in the first place (see app.js). */
+   stream are removed outright, not dimmed - on by default, and the "Stroke labels" checkbox
+   always wins by never applying the class in the first place (see app.js). */
 .scaffold-labels-off .cell .snd,
-.scaffold-labels-off .cell .kc { opacity: 0.18; }
+.scaffold-labels-off .cell .kc { display: none; }
 
 /* A scheduled diagnostic probe word (lessons.js's kinematicGap): tagged subtly so an
    unexpectedly easy word mid-concerto doesn't read as a mistake in the algorithm. */
@@ -410,11 +410,10 @@ body.paused #practice .feedback {
 
 .keyboard-wrap { display: grid; gap: 10px; justify-items: center; }
 
-/* Most consequential scaffold - fades last, and only once every unlocked key is comfortably
-   sustained, not merely at the mastery bar. Always just a default; the "Keyboard diagram"
-   checkbox overrides it by never applying these classes (see app.js). */
-.keyboard.faded { opacity: 0.35; transition: opacity 0.3s ease; }
-.keyboard.hidden { display: none; }
+/* Most consequential scaffold - on by default. Off collapses it to an empty box (its rows
+   removed, not dimmed) so there's no half-visible crutch left to lean on; the "Keyboard
+   diagram" checkbox always wins by never applying the class in the first place (see app.js). */
+.keyboard.empty .kb-row { display: none; }
 
 .keyboard {
   display: grid;

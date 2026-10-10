@@ -86,8 +86,14 @@
     return 0.3;
   }
 
+  // Scaffolds default ON (always shown) - fading is something a learner opts into by
+  // unchecking a box, never a surprise sprung on a fresh or imported profile.
+  function defaultScaffolds() {
+    return { labels: true, target: true, keyboard: true };
+  }
+
   function emptyProgress() {
-    return { unlocked: START_KEYS, keys: {}, words: [], lessonHistory: [], totalTyped: 0 };
+    return { unlocked: START_KEYS, keys: {}, words: [], lessonHistory: [], totalTyped: 0, scaffolds: defaultScaffolds() };
   }
 
   // Keeps only the fields the engine understands, so an old or damaged save still loads.
@@ -123,6 +129,11 @@
       progress.lessonHistory = saved.lessonHistory
         .filter((entry) => entry && Number.isFinite(entry.accuracy) && Number.isFinite(entry.wpm))
         .slice(-LESSON_HISTORY_LIMIT);
+    }
+    if (saved.scaffolds && typeof saved.scaffolds === 'object') {
+      for (const stage of Object.keys(progress.scaffolds)) {
+        if (typeof saved.scaffolds[stage] === 'boolean') progress.scaffolds[stage] = saved.scaffolds[stage];
+      }
     }
     if (Number.isFinite(saved.totalTyped)) {
       progress.totalTyped = Math.max(0, Math.floor(saved.totalTyped));
@@ -260,13 +271,18 @@
   }
 
   // 0 (learning), 1 (solid), 2 (fully sustained): how settled a key is, for fading scaffolds.
-  // Tier 2 needs the whole rolling accuracy window full, not just "enough to count" - a short
-  // lucky streak should not be enough to take a scaffold away.
+  // Both tiers need the whole rolling accuracy window full (KEY_ACCURACY_WINDOW real recent
+  // attempts on this exact key), not just "enough samples to count" - confidence alone can
+  // read as high after only a handful of reps (its own samples ramp tops out at just
+  // SAMPLES_TO_LEARN), which let a scaffold fade within the first few words after a key
+  // unlocked for anyone with real practice history on the *other* keys, and flicker as a
+  // live EWMA confidence bounced across the threshold. Requiring the full window means a
+  // scaffold only ever fades after real, sustained practice on that specific key.
   function masteryTier(progress, name) {
     const stat = progress.keys[name];
-    if (!stat) return 0;
+    if (!stat || stat.recent.length < KEY_ACCURACY_WINDOW) return 0;
     const conf = confidence(progress, name);
-    if (stat.recent.length >= KEY_ACCURACY_WINDOW && conf >= MASTERY_TIER_2_CONFIDENCE) return 2;
+    if (conf >= MASTERY_TIER_2_CONFIDENCE) return 2;
     if (conf >= MASTERY_TIER_1_CONFIDENCE) return 1;
     return 0;
   }
@@ -277,6 +293,19 @@
     const names = unlockedNames(progress);
     if (names.length === 0) return 0;
     return Math.min(...names.map((name) => masteryTier(progress, name)));
+  }
+
+  // The tier each scaffold stage needs scaffoldTier to reach before it defaults to fading.
+  const SCAFFOLD_STAGE_TIER = { labels: 1, target: 2, keyboard: 2 };
+
+  // Whether a given scaffold (one of SCAFFOLD_STAGE_TIER's keys) should be shown. `override`
+  // is the matching checkbox's own checked state, and always wins outright: a scaffold is
+  // only ever defaulted away, never removed with no way back. This is the one function both
+  // the fade decision and its override live in, so the override behaviour itself is covered
+  // by a plain unit test rather than only living, unverified, inside app.js's DOM code.
+  function scaffoldVisible(progress, stage, override) {
+    if (override) return true;
+    return scaffoldTier(progress) < SCAFFOLD_STAGE_TIER[stage];
   }
 
   // The etude<->concerto dial, 0-100: how ready the focus key is, reusing the same signal
@@ -493,6 +522,7 @@
     confidence,
     masteryTier,
     scaffoldTier,
+    scaffoldVisible,
     complexityScore,
     complexityBand,
     kinematicGap,

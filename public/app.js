@@ -71,30 +71,27 @@
     $("hints").checked = state.hints;
   }
 
-  // Three scaffolds, each its own checkbox - checked means "always show, ignore mastery",
-  // unchecked (the default) means "let scaffoldTier fade it in automatically." Nothing is
-  // ever taken away with no way back: every fade is only ever a default a learner can
-  // override, the same way the hints checkbox already worked before these existed. Ordered
-  // least -> most consequential to remove, which is also the order they fade in by default.
-  const SCAFFOLD_KEYS = {
-    labels: 'steno-lessions.showLabels',
-    target: 'steno-lessions.showTarget',
-    keyboard: 'steno-lessions.showKeyboard',
-  };
-  function readScaffold(flag) {
-    try {
-      return localStorage.getItem(SCAFFOLD_KEYS[flag]) === 'on';
-    } catch {
-      return false;
+  // [flag in progress.scaffolds, matching checkbox id], ordered least -> most consequential.
+  const SCAFFOLD_BOXES = [
+    ['labels', 'show-labels'],
+    ['target', 'show-target'],
+    ['keyboard', 'show-keyboard'],
+  ];
+  // Syncs the three scaffold checkboxes to state.progress.scaffolds - called on load and
+  // again after a progress import, so a pasted-in profile's own preferences take over the UI
+  // immediately instead of leaving the previous profile's checkboxes stale.
+  function applyScaffoldBoxes() {
+    for (const [flag, id] of SCAFFOLD_BOXES) {
+      $(id).checked = state.progress.scaffolds[flag];
     }
   }
-  function writeScaffold(flag, on) {
-    try {
-      localStorage.setItem(SCAFFOLD_KEYS[flag], on ? 'on' : 'off');
-    } catch {
-      // Saving is only a convenience; the setting still applies for this visit
-    }
-  }
+
+  // Three scaffolds, each its own checkbox - checked (the default) means "always show,
+  // ignore mastery", unchecked means "let scaffoldTier fade it in automatically." Nothing is
+  // ever taken away with no way back: fading is only ever something a learner opts into by
+  // unchecking a box, never a default sprung on a fresh or imported profile. Ordered least ->
+  // most consequential to remove. These live in state.progress.scaffolds (not localStorage),
+  // so they travel with the exported/imported progress blob like everything else.
   const escapeHtml = (text) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
   const state = {
@@ -105,9 +102,6 @@
     slotByName: new Map(), // "S-" -> { name, sound, label }
     strokeWord: new Map(), // single-stroke chord bits -> the word it translates to
     hints: readHints(),
-    showLabels: readScaffold('labels'),
-    showTarget: readScaffold('target'),
-    showKeyboard: readScaffold('keyboard'),
     keyEls: new Map(), // event.code -> element
     queue: [], // live, rolling buffer of upcoming words - queue[0] is the one being typed
     recent: [], // words used lately, so the queue does not repeat them
@@ -265,30 +259,21 @@
   }
 
   // Prestige scaffold fading: least-consequential first. Each stage only ever changes a
-  // *default* - the matching checkbox (state.showLabels/showTarget/showKeyboard) always wins
-  // and forces it back on, so nothing is ever taken away with no way to restore it.
+  // *default* - the matching checkbox (state.progress.scaffolds.{labels,target,keyboard}, on
+  // by default) always wins, so nothing is ever taken away with no way to restore it.
   function renderKeyboard() {
     const target = currentStroke();
     const mask = unlockedMask();
-    const tier = L.scaffoldTier(state.progress);
-    const labelsOn = state.showLabels || tier < 1;
-    const targetOn = state.showTarget || tier < 2;
+    const scaffolds = state.progress.scaffolds;
+    const labelsOn = L.scaffoldVisible(state.progress, 'labels', scaffolds.labels);
+    const targetOn = L.scaffoldVisible(state.progress, 'target', scaffolds.target);
+    const keyboardOn = L.scaffoldVisible(state.progress, 'keyboard', scaffolds.keyboard);
     // Least-consequential scaffold: the sound/key-name text line under each word in the
-    // stream (renderStream's .snd/.kc spans) - a pure label, fades first.
+    // stream (renderStream's .snd/.kc spans) - a pure label. Off means gone, not dimmed.
     document.body.classList.toggle('scaffold-labels-off', !labelsOn);
-    // The keyboard diagram is the biggest, longest-lived crutch (steno chords fire at once,
-    // so there's no "typing one key at a time" to fall back on) - it fades to an outline
-    // first, and only hides fully once every unlocked key is comfortably past the tier-2
-    // bar, not merely at it.
-    const avgConfidence = tier >= 2
-      ? L.unlockedNames(state.progress).reduce((sum, name) => sum + L.confidence(state.progress, name), 0)
-        / Math.max(1, L.unlockedNames(state.progress).length)
-      : 0;
-    const keyboardEl = $('keyboard');
-    const keyboardFaded = !state.showKeyboard && tier >= 2;
-    const keyboardHidden = !state.showKeyboard && tier >= 2 && avgConfidence >= 0.95;
-    keyboardEl.classList.toggle('faded', keyboardFaded && !keyboardHidden);
-    keyboardEl.classList.toggle('hidden', keyboardHidden);
+    // Most consequential scaffold: off collapses the keyboard to an empty box (its rows
+    // removed, not merely dimmed), so there's no half-visible crutch to lean on.
+    $('keyboard').classList.toggle('empty', !keyboardOn);
     for (const [code, el] of state.keyEls) {
       const info = state.infoByCode.get(code);
       el.classList.toggle('steno', Boolean(info));
@@ -927,17 +912,11 @@
       applyHints();
       refresh();
     });
-    const SCAFFOLD_BOXES = [
-      ['labels', 'show-labels', 'showLabels'],
-      ['target', 'show-target', 'showTarget'],
-      ['keyboard', 'show-keyboard', 'showKeyboard'],
-    ];
-    for (const [flag, id, stateKey] of SCAFFOLD_BOXES) {
-      const box = $(id);
-      box.checked = state[stateKey];
-      box.addEventListener('change', (event) => {
-        state[stateKey] = event.target.checked;
-        writeScaffold(flag, event.target.checked);
+    applyScaffoldBoxes();
+    for (const [flag, id] of SCAFFOLD_BOXES) {
+      $(id).addEventListener('change', (event) => {
+        state.progress.scaffolds[flag] = event.target.checked;
+        saveProgress();
         refresh();
       });
     }
@@ -964,6 +943,7 @@
       state.progress = incoming;
       state.recent = [];
       state.queue = [];
+      applyScaffoldBoxes();
       refillQueue();
       startWord();
       saveProgress();

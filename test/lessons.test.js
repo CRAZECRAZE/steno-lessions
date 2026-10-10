@@ -282,6 +282,54 @@ test('masteryTier needs the full rolling window and sustained confidence, not ju
   assert.equal(lessons.masteryTier(progress, 'T-'), 2);
 });
 
+test('a handful of reps on a freshly unlocked key reads as 0, even surrounded by long-mastered keys', () => {
+  // Regression test: confidence alone can read as high after only a few reps (its own
+  // samples ramp tops out at SAMPLES_TO_LEARN), which used to let a scaffold fade within the
+  // first few words after a new key unlocked for anyone with real history on the *other*
+  // keys - masteryTier must require the newly-unlocked key's own full rolling window, not
+  // just a high instantaneous confidence score.
+  const progress = lessons.emptyProgress();
+  for (const name of lessons.unlockedNames(progress)) {
+    if (name === 'S-') continue;
+    for (let i = 0; i < 300; i++) lessons.recordChord(progress, [name], 400, true);
+  }
+  for (let i = 0; i < 6; i++) lessons.recordChord(progress, ['S-'], 400, true);
+  assert.ok(lessons.confidence(progress, 'S-') > 0.6, 'confidence alone already reads as high');
+  assert.equal(lessons.masteryTier(progress, 'S-'), 0, 'but the key itself is not actually sustained yet');
+  assert.equal(lessons.scaffoldTier(progress), 0);
+});
+
+test('scaffoldVisible always honors the override, regardless of mastery tier', () => {
+  const mastered = lessons.emptyProgress();
+  for (const name of lessons.unlockedNames(mastered)) {
+    for (let i = 0; i < 30; i++) lessons.recordChord(mastered, [name], 400, true);
+  }
+  assert.equal(lessons.scaffoldTier(mastered), 2);
+  // Fully mastered, override off: auto-fade takes over for every stage.
+  assert.equal(lessons.scaffoldVisible(mastered, 'labels', false), false);
+  assert.equal(lessons.scaffoldVisible(mastered, 'target', false), false);
+  assert.equal(lessons.scaffoldVisible(mastered, 'keyboard', false), false);
+  // Override on: always visible, no matter how mastered the keys are.
+  assert.equal(lessons.scaffoldVisible(mastered, 'labels', true), true);
+  assert.equal(lessons.scaffoldVisible(mastered, 'target', true), true);
+  assert.equal(lessons.scaffoldVisible(mastered, 'keyboard', true), true);
+  // Fresh progress, override off: nothing is sustained yet, so everything stays visible.
+  const fresh = lessons.emptyProgress();
+  assert.equal(lessons.scaffoldVisible(fresh, 'labels', false), true);
+  assert.equal(lessons.scaffoldVisible(fresh, 'keyboard', false), true);
+});
+
+test('scaffolds default to on for a fresh profile and for an old save that predates the field', () => {
+  assert.deepEqual(lessons.emptyProgress().scaffolds, { labels: true, target: true, keyboard: true });
+  const oldSave = lessons.normalize({ unlocked: 10 });
+  assert.deepEqual(oldSave.scaffolds, { labels: true, target: true, keyboard: true });
+});
+
+test('normalize round-trips scaffold preferences, ignoring garbage values', () => {
+  const normalized = lessons.normalize({ scaffolds: { labels: false, target: 'nonsense', bogusField: false } });
+  assert.deepEqual(normalized.scaffolds, { labels: false, target: true, keyboard: true });
+});
+
 test('scaffoldTier is the minimum mastery tier across every unlocked key', () => {
   const progress = lessons.emptyProgress();
   for (const name of lessons.unlockedNames(progress)) {
