@@ -503,7 +503,6 @@
     const unlockedNames = L.unlockedNames(progress);
     const masteredCount = unlockedNames.filter((name) => L.masteryTier(progress, name) >= 2).length;
     const badges = [
-      { cls: 'bronze', label: 'First sound mastered', earned: masteredCount >= 1 },
       { cls: 'silver', label: 'Half your sounds mastered', earned: masteredCount >= Math.ceil(unlockedNames.length / 2) },
       { cls: 'gold', label: 'Every sound mastered', earned: unlockedNames.length > 0 && masteredCount === unlockedNames.length },
     ];

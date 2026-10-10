@@ -157,9 +157,8 @@ body {
 .key-chips li.tier-1 { border-color: color-mix(in srgb, var(--good) 40%, transparent); }
 .key-chips li.tier-2 { border-style: double; border-width: 3px; border-color: var(--good); }
 
-/* Vanity trophy chips: bronze/silver/gold, purely derived, no state of their own. Kept
-   visually distinct from the confidence-gradient chips above so they read as trophies, not
-   live stats. */
+/* Vanity trophy chips: silver/gold, purely derived, no state of their own. Kept visually
+   distinct from the confidence-gradient chips above so they read as trophies, not live stats. */
 .key-chips li.vanity {
   font-weight: 700;
   border-style: solid;
@@ -170,7 +169,6 @@ body {
   border-color: var(--line);
   opacity: 0.5;
 }
-.key-chips li.vanity.bronze.earned { background: #cd7f32; color: #2a1a06; border-color: #a86425; }
 .key-chips li.vanity.silver.earned { background: #c0c0c8; color: #2a2a2e; border-color: #9a9aa2; }
 .key-chips li.vanity.gold.earned {
   background: linear-gradient(135deg, #ffd76a, #e8a93a);
