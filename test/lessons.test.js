@@ -54,10 +54,10 @@ test('a miss slows a key down rather than counting as a sample', () => {
   assert.ok(progress.keys['T-'].ewmaMs > 500);
 });
 
-test('the words-per-minute target rises from 30 to 50 as keys are added', () => {
-  assert.equal(lessons.wpmTarget(lessons.START_KEYS), 30);
-  assert.equal(lessons.wpmTarget(lessons.START_KEYS + 5), 40);
-  assert.equal(lessons.wpmTarget(lessons.KEY_ORDER.length), 50);
+test('the words-per-minute target is a flat bar regardless of how many keys are unlocked', () => {
+  assert.equal(lessons.wpmTarget(lessons.START_KEYS), lessons.WPM_TARGET);
+  assert.equal(lessons.wpmTarget(lessons.START_KEYS + 5), lessons.WPM_TARGET);
+  assert.equal(lessons.wpmTarget(lessons.KEY_ORDER.length), lessons.WPM_TARGET);
 });
 
 test('windowStats reports words per minute and accuracy over the newest words', () => {

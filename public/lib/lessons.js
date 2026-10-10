@@ -43,9 +43,13 @@
   // Attempts needed on a key before its rolling accuracy can gate an unlock.
   const KEY_ACCURACY_MIN_SAMPLES = 5;
 
-  // Words per minute needed to unlock the next key. It rises from 30 to 50 as keys are added.
-  function wpmTarget(unlocked) {
-    return Math.min(50, 30 + 2 * (unlocked - START_KEYS));
+  // Words per minute needed to unlock the next key. A flat bar for every key - per-key
+  // accuracy gating (KEY_ACCURACY_TARGET) is what actually proves a new key is mastered,
+  // so a rising speed target on top of that only punished the lesson right after a brand
+  // new, still-unfamiliar key was introduced.
+  const WPM_TARGET = 35;
+  function wpmTarget() {
+    return WPM_TARGET;
   }
 
   function lengthWeight(length) {
@@ -336,6 +340,7 @@
     keyAccuracy,
     canUnlock,
     wpmTarget,
+    WPM_TARGET,
     confidence,
     unlockIfReady,
     recordLesson,
