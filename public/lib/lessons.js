@@ -23,7 +23,7 @@
   // Share of strokes that must be right on the first try.
   const ACCURACY_TARGET = 0.95;
   // Share of attempts on a single key that must be right before it can gate an unlock.
-  const KEY_ACCURACY_TARGET = 0.9;
+  const KEY_ACCURACY_TARGET = 0.8;
   // Completed words kept in the history. Only the newest LESSON_SIZE matter for unlocking.
   const HISTORY_LIMIT = 100;
   // Time added to a stroke's average for each miss on it.

@@ -420,7 +420,9 @@
       const unlocked = index < progress.unlocked;
       chip.classList.toggle('locked', !unlocked);
       chip.classList.toggle('current', unlocked && name === focus);
-      if (unlocked) chip.style.setProperty('--conf', L.confidence(progress, name).toFixed(2));
+      // Cubed so the chip reads as red/at-risk well before confidence actually bottoms out -
+      // a key that's merely "pretty good" should still visibly warn, not look fully green.
+      if (unlocked) chip.style.setProperty('--conf', (L.confidence(progress, name) ** 3).toFixed(2));
       chip.textContent = S.displayName(name);
       chip.title = state.slotByName.get(name)?.sound || name;
       list.appendChild(chip);

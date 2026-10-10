@@ -132,7 +132,11 @@ body {
   font: 600 13px ui-monospace, Menlo, monospace;
   padding: 3px 8px;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--good) calc(var(--conf, 0) * 70%), var(--plain));
+  background: color-mix(
+    in srgb,
+    var(--good) calc(var(--conf, 0) * 70%),
+    color-mix(in srgb, var(--bad) calc((1 - var(--conf, 0)) * 55%), var(--plain))
+  );
   color: var(--plain-ink);
   border: 1px solid transparent;
 }

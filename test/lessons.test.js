@@ -162,7 +162,7 @@ test('focusKey picks a key that is fast but often wrong over one that is merely 
   // S- is fast (would read as fully confident on speed alone) but wrong often enough that
   // its own accuracy sits below the unlock gate: this is the real thing blocking unlock,
   // not a key that is merely a bit slower than the others.
-  for (let i = 0; i < 10; i++) lessons.recordChord(progress, ['S-'], 400, i % 5 !== 0);
+  for (let i = 0; i < 10; i++) lessons.recordChord(progress, ['S-'], 400, i % 3 !== 0);
   assert.equal(lessons.keyAccuracy(progress, 'S-') < lessons.KEY_ACCURACY_TARGET, true);
   assert.equal(lessons.focusKey(progress), 'S-');
 });
