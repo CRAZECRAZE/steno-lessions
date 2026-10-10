@@ -41,7 +41,7 @@ test('normalize keeps good fields and drops damaged ones', () => {
     words: [{ ms: 800, strokes: 2, misses: 0 }, { ms: 'x' }],
   });
   assert.equal(progress.unlocked, lessons.KEY_ORDER.length);
-  assert.deepEqual(progress.keys['A-'], { samples: 2, ewmaMs: 900, misses: 1, recent: [] });
+  assert.deepEqual(progress.keys['A-'], { samples: 2, ewmaMs: 900, misses: 1, recent: [], probeRecent: [] });
   assert.equal(progress.keys.NOPE, undefined);
   assert.deepEqual(progress.words, [{ ms: 800, strokes: 2, misses: 0 }]);
 });
@@ -226,4 +226,84 @@ test('pickWords skips recently typed words when it can', () => {
   const avoid = ['cat', 'test', 'and'];
   const picked = lessons.pickWords(words, progress, slotIndex, { random: () => 0.1, count: 3, avoid });
   assert.ok(!picked.some((word) => avoid.includes(word.text)));
+});
+
+test('complexityScore/complexityBand read the focus key\'s own confidence as the etude<->concerto dial', () => {
+  const progress = lessons.emptyProgress();
+  // Fresh progress: no samples anywhere yet, so the focus key has 0 confidence - etude band.
+  assert.equal(lessons.complexityScore(progress), 0);
+  assert.equal(lessons.complexityBand(lessons.complexityScore(progress)), 'etude');
+  assert.equal(lessons.complexityBand(lessons.ETUDE_MAX), 'study');
+  assert.equal(lessons.complexityBand(lessons.CONCERTO_MIN), 'concerto');
+});
+
+test('nextWord in the etude band only uses the focus key plus already-mastered keys, and keeps it short', () => {
+  const progress = lessons.emptyProgress();
+  // Make every unlocked key but S- fully mastered, so S- is the lone, unmastered focus key.
+  for (const name of lessons.unlockedNames(progress)) {
+    if (name === 'S-') continue;
+    for (let i = 0; i < 30; i++) lessons.recordChord(progress, [name], 500, true);
+  }
+  assert.equal(lessons.focusKey(progress), 'S-');
+  const word = lessons.nextWord(words, progress, slotIndex, { random: () => 0.2 });
+  assert.equal(word.band, 'etude');
+  assert.ok(word.text.length <= 3, `${word.text} should be short in the etude band`);
+});
+
+test('nextWord in the concerto band favors words that recombine the most-recently-unlocked keys', () => {
+  const progress = lessons.emptyProgress();
+  for (let i = lessons.START_KEYS; i < lessons.KEY_ORDER.length; i++) progress.unlocked = i + 1;
+  // Every unlocked key fully mastered and fast, so the focus key's confidence sits in the
+  // concerto band regardless of which key it lands on.
+  for (const name of lessons.unlockedNames(progress)) {
+    for (let i = 0; i < 30; i++) lessons.recordChord(progress, [name], 400, true);
+  }
+  const word = lessons.nextWord(words, progress, slotIndex, { random: () => 0.1 });
+  assert.equal(word.band, 'concerto');
+});
+
+test('nextWord forces the etude band on request, for scheduled diagnostic probes', () => {
+  const progress = lessons.emptyProgress();
+  for (let i = lessons.START_KEYS; i < lessons.KEY_ORDER.length; i++) progress.unlocked = i + 1;
+  for (const name of lessons.unlockedNames(progress)) {
+    for (let i = 0; i < 30; i++) lessons.recordChord(progress, [name], 400, true);
+  }
+  const word = lessons.nextWord(words, progress, slotIndex, { random: () => 0.1, forceBand: 'etude', isProbe: true });
+  assert.equal(word.band, 'etude');
+  assert.equal(word.isProbe, true);
+});
+
+test('masteryTier needs the full rolling window and sustained confidence, not just a short streak', () => {
+  const progress = lessons.emptyProgress();
+  assert.equal(lessons.masteryTier(progress, 'T-'), 0);
+  lessons.recordChord(progress, ['T-'], 500, true);
+  assert.equal(lessons.masteryTier(progress, 'T-'), 0, 'a single rep is not sustained yet');
+  for (let i = 0; i < 30; i++) lessons.recordChord(progress, ['T-'], 500, true);
+  assert.equal(lessons.masteryTier(progress, 'T-'), 2);
+});
+
+test('scaffoldTier is the minimum mastery tier across every unlocked key', () => {
+  const progress = lessons.emptyProgress();
+  for (const name of lessons.unlockedNames(progress)) {
+    for (let i = 0; i < 30; i++) lessons.recordChord(progress, [name], 500, true);
+  }
+  assert.equal(lessons.scaffoldTier(progress), 2);
+  // One under-practiced key holds the whole fade back, even though every other key is sustained.
+  progress.keys['S-'] = { samples: 1, ewmaMs: 2000, misses: 0, recent: [], probeRecent: [] };
+  assert.equal(lessons.masteryTier(progress, 'S-'), 0);
+  assert.equal(lessons.scaffoldTier(progress), 0);
+});
+
+test('kinematicGap flags a key whose isolated probe reps are not substantially faster than blended practice', () => {
+  const progress = lessons.emptyProgress();
+  for (let i = 0; i < 10; i++) lessons.recordChord(progress, ['T-'], 1000, true);
+  // Healthy: probes comfortably faster than blended speed.
+  for (let i = 0; i < 5; i++) lessons.recordProbe(progress, 'T-', 700);
+  assert.equal(lessons.kinematicGap(progress, 'T-') > lessons.HEALTHY_PROBE_GAP, true);
+  // Unhealthy: probes no faster (or slower) than blended speed - complexity isn't the
+  // bottleneck, raw technique is.
+  const stuck = lessons.emptyProgress();
+  for (let i = 0; i < 10; i++) lessons.recordChord(stuck, ['T-'], 1000, true);
+  for (let i = 0; i < 5; i++) lessons.recordProbe(stuck, 'T-', 980);
+  assert.equal(lessons.kinematicGap(stuck, 'T-') <= lessons.HEALTHY_PROBE_GAP, true);
 });

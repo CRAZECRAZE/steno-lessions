@@ -42,6 +42,27 @@
   const KEY_ACCURACY_WINDOW = 30;
   // Attempts needed on a key before its rolling accuracy can gate an unlock.
   const KEY_ACCURACY_MIN_SAMPLES = 5;
+  // The etude<->concerto complexity slider, 0-100. Below ETUDE_MAX: isolated, minimal-load
+  // reps on the focus key alone (an "etude"). Above CONCERTO_MIN: full-length words that
+  // deliberately recombine several recently-unlocked keys together (a "concerto"). Between
+  // the two: today's normal word picking, unchanged.
+  const ETUDE_MAX = 40;
+  const CONCERTO_MIN = 75;
+  // Longest word an etude-band pick will use - the point is an isolated, minimal-load rep.
+  const ETUDE_MAX_LENGTH = 3;
+  // How many of the most-recently-unlocked keys a concerto-band pick tries to recombine.
+  const RECOMBINE_LAST = 3;
+  // Attempts on a key's rolling window needed before its mastery tier can reach 2 (fully
+  // sustained), so a lucky short streak can't fade a scaffold prematurely.
+  const MASTERY_TIER_1_CONFIDENCE = 0.6;
+  const MASTERY_TIER_2_CONFIDENCE = 0.9;
+  // Recent probe reps kept per key, for comparing isolated-rep speed against blended speed.
+  const PROBE_WINDOW = 10;
+  const PROBE_MIN_SAMPLES = 3;
+  // How much faster an isolated probe rep should be than blended practice, as a fraction of
+  // blended speed. Isolated reps should always be comfortably faster; a gap below this means
+  // word complexity is not the real bottleneck - raw chord-formation speed is.
+  const HEALTHY_PROBE_GAP = 0.2;
 
   // Words per minute needed to unlock the next key. A flat bar for every key - per-key
   // accuracy gating (KEY_ACCURACY_TARGET) is what actually proves a new key is mastered,
@@ -87,6 +108,9 @@
           recent: Array.isArray(stat.recent)
             ? stat.recent.filter((hit) => hit === 0 || hit === 1).slice(-KEY_ACCURACY_WINDOW)
             : [],
+          probeRecent: Array.isArray(stat.probeRecent)
+            ? stat.probeRecent.filter((ms) => Number.isFinite(ms) && ms > 0).slice(-PROBE_WINDOW)
+            : [],
         };
       }
     }
@@ -114,7 +138,7 @@
   // A miss adds a penalty to the average rather than counting as a sample.
   function recordChord(progress, names, ms, correct) {
     for (const name of names) {
-      const stat = progress.keys[name] || { samples: 0, ewmaMs: null, misses: 0, recent: [] };
+      const stat = progress.keys[name] || { samples: 0, ewmaMs: null, misses: 0, recent: [], probeRecent: [] };
       const cost = correct ? ms : ms + MISS_PENALTY_MS;
       stat.ewmaMs = stat.ewmaMs === null ? cost : stat.ewmaMs * 0.7 + cost * 0.3;
       // A plain rolling window (not an EWMA), so a single recent miss can't swing the gate by
@@ -235,6 +259,61 @@
     return focus;
   }
 
+  // 0 (learning), 1 (solid), 2 (fully sustained): how settled a key is, for fading scaffolds.
+  // Tier 2 needs the whole rolling accuracy window full, not just "enough to count" - a short
+  // lucky streak should not be enough to take a scaffold away.
+  function masteryTier(progress, name) {
+    const stat = progress.keys[name];
+    if (!stat) return 0;
+    const conf = confidence(progress, name);
+    if (stat.recent.length >= KEY_ACCURACY_WINDOW && conf >= MASTERY_TIER_2_CONFIDENCE) return 2;
+    if (conf >= MASTERY_TIER_1_CONFIDENCE) return 1;
+    return 0;
+  }
+
+  // The lowest mastery tier among unlocked keys: a scaffold only fades once every unlocked
+  // key, not just the newest one, is ready for less help.
+  function scaffoldTier(progress) {
+    const names = unlockedNames(progress);
+    if (names.length === 0) return 0;
+    return Math.min(...names.map((name) => masteryTier(progress, name)));
+  }
+
+  // The etude<->concerto dial, 0-100: how ready the focus key is, reusing the same signal
+  // that already drives its HUD bar. Recomputed fresh every call, no state of its own.
+  function complexityScore(progress) {
+    const focus = focusKey(progress);
+    if (!focus) return 0;
+    return confidence(progress, focus) * 100;
+  }
+
+  function complexityBand(score) {
+    if (score < ETUDE_MAX) return 'etude';
+    if (score >= CONCERTO_MIN) return 'concerto';
+    return 'study';
+  }
+
+  // Appends one isolated-rep timing for `name`, kept apart from the normal blended ewmaMs so
+  // probe (isolated) speed and everyday (blended) speed can be compared.
+  function recordProbe(progress, name, ms) {
+    const stat = progress.keys[name] || { samples: 0, ewmaMs: null, misses: 0, recent: [], probeRecent: [] };
+    stat.probeRecent = [...(stat.probeRecent || []), ms].slice(-PROBE_WINDOW);
+    progress.keys[name] = stat;
+    return progress;
+  }
+
+  // How much faster `name`'s isolated probe reps are than its everyday blended speed, as a
+  // fraction of blended speed (0.2 = probes are 20% faster, as a healthy gap should be).
+  // null if there is not enough probe data yet to judge. A gap at or below HEALTHY_PROBE_GAP
+  // (including negative, i.e. probes no faster or even slower) means complexity is not the
+  // real bottleneck for this key - raw chord-formation speed is.
+  function kinematicGap(progress, name) {
+    const stat = progress.keys[name];
+    if (!stat || !stat.ewmaMs || !stat.probeRecent || stat.probeRecent.length < PROBE_MIN_SAMPLES) return null;
+    const probeAvg = stat.probeRecent.reduce((sum, ms) => sum + ms, 0) / stat.probeRecent.length;
+    return (stat.ewmaMs - probeAvg) / stat.ewmaMs;
+  }
+
   // Bit mask of the unlocked keys, using the same bit order as keymux's slots.
   function unlockedMask(progress, slotIndex) {
     return unlockedNames(progress).reduce((mask, name) => mask | (1 << slotIndex.get(name)), 0);
@@ -264,18 +343,26 @@
   // Picks words for the stream. Only words with at least one stroke sequence that uses
   // unlocked keys are eligible. Words that use the focus key come up more often, and words
   // in `avoid` (recently typed) are skipped where possible. `random` returns [0, 1).
+  // `options.allowMask`, if given, is used in place of the unlocked mask to decide which
+  // words are eligible (but is expected to already be a subset of it) - this is how an etude
+  // pick restricts itself to the focus key plus only already-mastered keys. `options.bonusFn`,
+  // if given, multiplies a word's weight by `bonusFn(usable)` - this is how a concerto pick
+  // rewards words that recombine several recently-unlocked keys together.
   function pickWords(words, progress, slotIndex, options = {}) {
     const random = options.random || Math.random;
     const count = options.count || LESSON_SIZE;
     const avoid = new Set(options.avoid || []);
+    const maxLength = options.maxLength || MAX_WORD_LENGTH;
     const mask = unlockedMask(progress, slotIndex);
+    const eligibilityMask = options.allowMask !== undefined ? options.allowMask & mask : mask;
+    const bonusFn = options.bonusFn || (() => 1);
     const focus = focusKey(progress);
     const focusBit = focus ? 1 << slotIndex.get(focus) : 0;
 
     const eligible = [];
     for (const word of words) {
-      if (word.text.length > MAX_WORD_LENGTH) continue;
-      const usable = usableVariants(word, mask);
+      if (word.text.length > maxLength) continue;
+      const usable = usableVariants(word, eligibilityMask);
       if (usable.length > 0) eligible.push({ word, usable });
     }
     if (eligible.length === 0) return [];
@@ -287,6 +374,7 @@
       // the length/stroke heuristics: medium length, one stroke, and actually common words win.
       let weight = lengthWeight(word.text.length) * strokeWeight(usable[0].length) * WordFreq.freqWeight(word.text);
       if (usable.some((strokes) => strokes.some((bits) => bits & focusBit))) weight *= 4;
+      weight *= bonusFn(usable);
       return { word, weight };
     });
 
@@ -316,6 +404,62 @@
     return pickWords(words, progress, slotIndex, { ...options, count: LESSON_SIZE });
   }
 
+  // Bitmask of unlocked keys at or above `tier` - the "already comfortable" keys an etude
+  // pick is allowed to lean on besides the focus key itself.
+  function masteredMask(progress, slotIndex, tier) {
+    let mask = 0;
+    for (const name of unlockedNames(progress)) {
+      if (masteryTier(progress, name) >= tier) mask |= 1 << slotIndex.get(name);
+    }
+    return mask;
+  }
+
+  // Bitmask of the `n` most-recently-unlocked keys, for the concerto-band recombination bonus.
+  function recentlyUnlockedMask(progress, slotIndex, n) {
+    const names = unlockedNames(progress).slice(-n);
+    return names.reduce((mask, name) => mask | (1 << slotIndex.get(name)), 0);
+  }
+
+  // One word, chosen for the live complexity band: 'etude' (isolated, minimal-load reps on
+  // the focus key), 'study' (today's normal picking, unchanged), or 'concerto' (full-length
+  // words that deliberately recombine several recently-unlocked keys). The band is read from
+  // `complexityScore` fresh every call, so it can move word to word, not just at a boundary -
+  // unless `options.forceBand` overrides it (used for scheduled diagnostic probes) or a
+  // `kinematicGap` deficit on the focus key forces 'etude' regardless of its confidence score,
+  // because a key whose isolated reps are not substantially faster than its blended reps is
+  // not actually being held back by word complexity.
+  function nextWord(words, progress, slotIndex, options = {}) {
+    const focus = focusKey(progress);
+    const gap = focus ? kinematicGap(progress, focus) : null;
+    const deficit = gap !== null && gap <= HEALTHY_PROBE_GAP;
+    const band = options.forceBand || (deficit ? 'etude' : complexityBand(complexityScore(progress)));
+    const pickOptions = { ...options, count: 1 };
+    delete pickOptions.forceBand;
+    delete pickOptions.isProbe;
+
+    if (band === 'etude' && focus) {
+      const focusBit = 1 << slotIndex.get(focus);
+      pickOptions.allowMask = masteredMask(progress, slotIndex, 1) | focusBit;
+      pickOptions.maxLength = ETUDE_MAX_LENGTH;
+    } else if (band === 'concerto') {
+      const recentMask = recentlyUnlockedMask(progress, slotIndex, RECOMBINE_LAST);
+      pickOptions.bonusFn = (usable) => {
+        if (!recentMask) return 1;
+        const bits = usable[0].reduce((mask, b) => mask | b, 0);
+        let count = 0;
+        for (let rest = bits & recentMask; rest; rest &= rest - 1) count += 1;
+        return 1 + count;
+      };
+    }
+
+    let picked = pickWords(words, progress, slotIndex, pickOptions)[0];
+    // An etude restriction (or any band option) can legitimately leave nothing eligible early
+    // on, when few keys are mastered yet - fall back to a plain pick rather than return nothing.
+    if (!picked) picked = pickWords(words, progress, slotIndex, { ...options, count: 1 })[0];
+    if (!picked) return null;
+    return { ...picked, band, isProbe: Boolean(options.isProbe), focusKeyAtPick: focus };
+  }
+
   // Whether loading `incoming` in place of `current` would erase real progress. totalTyped
   // only ever grows during real play, so a lower count can only mean older, replayed, or
   // tampered-with data, never progress earned since.
@@ -330,11 +474,16 @@
     ACCURACY_TARGET,
     KEY_ACCURACY_TARGET,
     TARGET_MS,
+    ETUDE_MAX,
+    CONCERTO_MIN,
+    PROBE_WINDOW,
+    HEALTHY_PROBE_GAP,
     emptyProgress,
     normalize,
     unlockedNames,
     recordChord,
     recordWord,
+    recordProbe,
     windowStats,
     scoreFor,
     keyAccuracy,
@@ -342,6 +491,11 @@
     wpmTarget,
     WPM_TARGET,
     confidence,
+    masteryTier,
+    scaffoldTier,
+    complexityScore,
+    complexityBand,
+    kinematicGap,
     unlockIfReady,
     recordLesson,
     focusKey,
@@ -349,6 +503,7 @@
     usableVariants,
     displayVariants,
     pickWords,
+    nextWord,
     startLesson,
     isRewind,
   };

@@ -70,6 +70,31 @@
     document.body.classList.toggle("hints-off", !state.hints);
     $("hints").checked = state.hints;
   }
+
+  // Three scaffolds, each its own checkbox - checked means "always show, ignore mastery",
+  // unchecked (the default) means "let scaffoldTier fade it in automatically." Nothing is
+  // ever taken away with no way back: every fade is only ever a default a learner can
+  // override, the same way the hints checkbox already worked before these existed. Ordered
+  // least -> most consequential to remove, which is also the order they fade in by default.
+  const SCAFFOLD_KEYS = {
+    labels: 'steno-lessions.showLabels',
+    target: 'steno-lessions.showTarget',
+    keyboard: 'steno-lessions.showKeyboard',
+  };
+  function readScaffold(flag) {
+    try {
+      return localStorage.getItem(SCAFFOLD_KEYS[flag]) === 'on';
+    } catch {
+      return false;
+    }
+  }
+  function writeScaffold(flag, on) {
+    try {
+      localStorage.setItem(SCAFFOLD_KEYS[flag], on ? 'on' : 'off');
+    } catch {
+      // Saving is only a convenience; the setting still applies for this visit
+    }
+  }
   const escapeHtml = (text) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
   const state = {
@@ -80,11 +105,14 @@
     slotByName: new Map(), // "S-" -> { name, sound, label }
     strokeWord: new Map(), // single-stroke chord bits -> the word it translates to
     hints: readHints(),
+    showLabels: readScaffold('labels'),
+    showTarget: readScaffold('target'),
+    showKeyboard: readScaffold('keyboard'),
     keyEls: new Map(), // event.code -> element
-    lesson: [], // the current lesson's words, fixed size
-    index: 0, // the word being typed, within the lesson
-    recent: [], // words used lately, so lessons do not repeat them
-    lastLessonStats: null, // previous lesson's windowStats, for the HUD deltas
+    queue: [], // live, rolling buffer of upcoming words - queue[0] is the one being typed
+    recent: [], // words used lately, so the queue does not repeat them
+    queuedCount: 0, // words pushed onto the queue this session, for the probe schedule
+    lastLessonStats: null, // windowStats as of the last LESSON_SIZE-word milestone, for HUD deltas
     candidates: [], // stroke sequences still possible for the current word
     strokeIdx: 0,
     wordMisses: 0,
@@ -102,7 +130,15 @@
     paused: false,
   };
 
-  const currentWord = () => state.lesson[state.index];
+  // Words ahead kept generated at any time: small enough that the live complexity band can
+  // actually move word to word instead of only at an old-style lesson boundary, big enough
+  // that generating the next one never has to block typing.
+  const LOOKAHEAD = 4;
+  // Every this many words, one is a forced, out-of-band diagnostic probe on the focus key -
+  // see lessons.js's kinematicGap for what it's checking.
+  const PROBE_INTERVAL = 12;
+
+  const currentWord = () => state.queue[0];
   // The stroke sequence to show: the first one that is still possible
   const shownStrokes = () => state.candidates[0] || [];
   const currentStroke = () => shownStrokes()[state.strokeIdx] || 0;
@@ -228,26 +264,56 @@
     }
   }
 
+  // Prestige scaffold fading: least-consequential first. Each stage only ever changes a
+  // *default* - the matching checkbox (state.showLabels/showTarget/showKeyboard) always wins
+  // and forces it back on, so nothing is ever taken away with no way to restore it.
   function renderKeyboard() {
     const target = currentStroke();
     const mask = unlockedMask();
+    const tier = L.scaffoldTier(state.progress);
+    const labelsOn = state.showLabels || tier < 1;
+    const targetOn = state.showTarget || tier < 2;
+    // Least-consequential scaffold: the sound/key-name text line under each word in the
+    // stream (renderStream's .snd/.kc spans) - a pure label, fades first.
+    document.body.classList.toggle('scaffold-labels-off', !labelsOn);
+    // The keyboard diagram is the biggest, longest-lived crutch (steno chords fire at once,
+    // so there's no "typing one key at a time" to fall back on) - it fades to an outline
+    // first, and only hides fully once every unlocked key is comfortably past the tier-2
+    // bar, not merely at it.
+    const avgConfidence = tier >= 2
+      ? L.unlockedNames(state.progress).reduce((sum, name) => sum + L.confidence(state.progress, name), 0)
+        / Math.max(1, L.unlockedNames(state.progress).length)
+      : 0;
+    const keyboardEl = $('keyboard');
+    const keyboardFaded = !state.showKeyboard && tier >= 2;
+    const keyboardHidden = !state.showKeyboard && tier >= 2 && avgConfidence >= 0.95;
+    keyboardEl.classList.toggle('faded', keyboardFaded && !keyboardHidden);
+    keyboardEl.classList.toggle('hidden', keyboardHidden);
     for (const [code, el] of state.keyEls) {
       const info = state.infoByCode.get(code);
       el.classList.toggle('steno', Boolean(info));
       el.classList.toggle('locked', Boolean(info) && (info.bits & ~mask) !== 0);
-      el.classList.toggle('target', state.hints && Boolean(info) && target !== 0 && (info.bits & target) === info.bits);
+      el.classList.toggle('target', state.hints && targetOn && Boolean(info) && target !== 0 && (info.bits & target) === info.bits);
       el.classList.toggle('down', state.pressed.has(code));
     }
   }
 
-  // Starts a new fixed-size lesson. Called on load and whenever the previous lesson finishes,
-  // so a freshly unlocked key's words show up in the very next lesson with no special-casing.
-  function nextLesson() {
-    const picks = L.startLesson(state.data.words, state.progress, state.slotIndex, { avoid: state.recent });
-    state.lesson = picks;
-    state.index = 0;
-    state.recent.push(...picks.map((word) => word.text));
-    state.recent.splice(0, Math.max(0, state.recent.length - 60));
+  // Tops the live queue back up to LOOKAHEAD, one word at a time, each read fresh off the
+  // current complexity band - so a shift in the focus key's confidence (or a probe coming
+  // due) can change the very next word, not just at an old-style lesson boundary.
+  function refillQueue() {
+    while (state.queue.length < LOOKAHEAD) {
+      state.queuedCount += 1;
+      const isProbe = state.queuedCount % PROBE_INTERVAL === 0;
+      const word = L.nextWord(state.data.words, state.progress, state.slotIndex, {
+        avoid: state.recent,
+        ...(isProbe ? { forceBand: 'etude', isProbe: true } : {}),
+      });
+      if (!word) break;
+      state.queue.push(word);
+      state.recent.push(word.text);
+      state.recent.splice(0, Math.max(0, state.recent.length - 60));
+    }
   }
 
   // Only stroke sequences that use unlocked keys are shown, so a word never asks for a locked key
@@ -265,18 +331,20 @@
 
   // The word stream. Each word is a column, with its sounds and keys directly under it, so the
   // words, sounds and keys run as three parallel lines (two when Key hints are off, since the
-  // keys line is hidden). The stroke being typed is highlighted.
+  // keys line is hidden). The stroke being typed is highlighted. This is now a small live,
+  // rolling buffer (LOOKAHEAD words) rather than a fixed lesson batch - there is no "done"
+  // word kept on screen, only the current one and what's coming right after it.
   function renderStream() {
     const stream = $('stream');
     stream.textContent = '';
     const mask = unlockedMask();
     let current = null;
-    for (let i = 0; i < state.lesson.length; i++) {
-      const word = state.lesson[i];
-      const isCurrent = i === state.index;
+    for (let i = 0; i < state.queue.length; i++) {
+      const word = state.queue[i];
+      const isCurrent = i === 0;
       const strokes = isCurrent ? shownStrokes() : L.displayVariants(word, mask)[0] || [];
       const cell = document.createElement('div');
-      cell.className = `cell${i < state.index ? ' done' : ''}${isCurrent ? ' current' : ''}`;
+      cell.className = `cell${isCurrent ? ' current' : ''}${word.isProbe ? ' probe' : ''}`;
       cell.style.gridTemplateColumns = `repeat(${Math.max(1, strokes.length)}, auto)`;
       const wordEl = document.createElement('span');
       wordEl.className = 'w';
@@ -377,7 +445,7 @@
       stream.appendChild(cell);
     }
     if (current) {
-      // Keep the word being typed in view as the bounded lesson fills the box.
+      // Keep the word being typed in view as the rolling buffer fills the box.
       current.scrollIntoView({ block: 'nearest' });
     }
   }
@@ -390,8 +458,9 @@
     return ` <span class="delta ${kind}">(${arrow}${fmt(Math.abs(delta))})</span>`;
   }
 
-  // Row 1: speed/accuracy/score for the lesson in progress, with the delta against the
-  // previous finished lesson.
+  // Row 1: speed/accuracy/score for the live rolling window, with the delta against the
+  // stats as of the last LESSON_SIZE-word milestone (a cosmetic checkpoint only - generation
+  // and unlocking are judged continuously, every word, not at that or any other boundary).
   function renderMetrics() {
     const { progress } = state;
     const stats = L.windowStats(progress);
@@ -406,10 +475,13 @@
       `<span>Speed: <strong>${wpm}wpm</strong>${deltaSpan(wpmDelta, (v) => `${v.toFixed(1)}wpm`)}</span>` +
       `<span>Accuracy: <strong>${accuracy.toFixed(2)}%</strong>${deltaSpan(accDelta, (v) => `${v.toFixed(2)}%`)}</span>` +
       `<span>Score: <strong>${score.toLocaleString()}</strong>${deltaSpan(scoreDelta, (v) => v.toLocaleString())}</span>`;
-    $('lesson-note').textContent = `Lesson: ${state.index}/${state.lesson.length}`;
+    const sinceMilestone = progress.totalTyped % L.LESSON_SIZE;
+    $('lesson-note').textContent = `Next break: ${sinceMilestone}/${L.LESSON_SIZE}`;
   }
 
-  // Row 2: one chip per key, unlocked keys tinted by confidence, the focus key outlined.
+  // Row 2: one chip per key, unlocked keys tinted by confidence, the focus key outlined, plus
+  // a trailing row of vanity trophy chips - purely derived from mastery tiers, no state of
+  // their own, so there is nothing to desync or corrupt on an old or partial save.
   function renderKeyChips() {
     const { progress } = state;
     const focus = L.focusKey(progress);
@@ -423,10 +495,25 @@
       // Cubed so the chip reads as red/at-risk well before confidence actually bottoms out -
       // a key that's merely "pretty good" should still visibly warn, not look fully green.
       if (unlocked) chip.style.setProperty('--conf', (L.confidence(progress, name) ** 3).toFixed(2));
+      if (unlocked) chip.classList.add(`tier-${L.masteryTier(progress, name)}`);
       chip.textContent = S.displayName(name);
       chip.title = state.slotByName.get(name)?.sound || name;
       list.appendChild(chip);
     });
+    const unlockedNames = L.unlockedNames(progress);
+    const masteredCount = unlockedNames.filter((name) => L.masteryTier(progress, name) >= 2).length;
+    const badges = [
+      { cls: 'bronze', label: 'First sound mastered', earned: masteredCount >= 1 },
+      { cls: 'silver', label: 'Half your sounds mastered', earned: masteredCount >= Math.ceil(unlockedNames.length / 2) },
+      { cls: 'gold', label: 'Every sound mastered', earned: unlockedNames.length > 0 && masteredCount === unlockedNames.length },
+    ];
+    for (const badge of badges) {
+      const chip = document.createElement('li');
+      chip.className = `vanity ${badge.cls}${badge.earned ? ' earned' : ' locked'}`;
+      chip.textContent = '★';
+      chip.title = badge.earned ? badge.label : `Locked: ${badge.label}`;
+      list.appendChild(chip);
+    }
   }
 
   // Row 3: the key most in need of practice right now, and what we know about it.
@@ -661,29 +748,39 @@
   }
 
   function wordDone() {
+    const finished = currentWord();
     L.recordWord(state.progress, { ms: state.wordMs, strokes: state.strokeIdx, misses: state.wordMisses });
+    // A forced probe word's timing is also logged apart from the normal blended ewmaMs, so
+    // kinematicGap can compare isolated-rep speed against everyday blended speed.
+    if (finished.isProbe && finished.focusKeyAtPick) {
+      L.recordProbe(state.progress, finished.focusKeyAtPick, state.wordMs);
+    }
     state.typed += 1;
-    state.index += 1;
+    state.queue.shift();
 
-    if (state.index >= state.lesson.length) {
-      // Lesson boundary: this is the one point unlocks are decided, the stats window is
-      // judged, and the word queue is reset, so a fresh lesson always reflects any new key.
+    // Unlocking is judged continuously - windowStats is already a rolling slice of the
+    // newest LESSON_SIZE words, so there is no "boundary" to wait for; checking after every
+    // word just means it fires the instant the window actually clears its targets.
+    if (L.unlockIfReady(state.progress)) {
+      const name = L.KEY_ORDER[state.progress.unlocked - 1];
+      const sound = state.slotByName.get(name)?.sound || '';
+      const allKeys = state.progress.unlocked >= L.KEY_ORDER.length;
+      setFeedback(
+        `Unlocked ${S.displayName(name)} (${sound}). Next: ${L.wpmTarget(state.progress.unlocked)} wpm.`,
+        'good',
+      );
+      showUnlockToast(allKeys ? 'All Keys!' : `${S.displayName(name)} (${sound})`, allKeys);
+    }
+
+    // Purely cosmetic break-reminder, every LESSON_SIZE words - a human milestone, not a
+    // generation or judging boundary (both already run continuously, above).
+    if (state.progress.totalTyped % L.LESSON_SIZE === 0) {
       state.lastLessonStats = L.windowStats(state.progress);
       L.recordLesson(state.progress, state.lastLessonStats);
-      if (L.unlockIfReady(state.progress)) {
-        const name = L.KEY_ORDER[state.progress.unlocked - 1];
-        const sound = state.slotByName.get(name)?.sound || '';
-        const allKeys = state.progress.unlocked >= L.KEY_ORDER.length;
-        setFeedback(
-          `Unlocked ${S.displayName(name)} (${sound}). Next: ${L.wpmTarget(state.progress.unlocked)} wpm.`,
-          'good',
-        );
-        showUnlockToast(allKeys ? 'All Keys!' : `${S.displayName(name)} (${sound})`, allKeys);
-      }
-      nextLesson();
       playLessonTransition();
     }
 
+    refillQueue();
     startWord();
     saveProgress();
     refresh();
@@ -831,7 +928,21 @@
       applyHints();
       refresh();
     });
-    nextLesson();
+    const SCAFFOLD_BOXES = [
+      ['labels', 'show-labels', 'showLabels'],
+      ['target', 'show-target', 'showTarget'],
+      ['keyboard', 'show-keyboard', 'showKeyboard'],
+    ];
+    for (const [flag, id, stateKey] of SCAFFOLD_BOXES) {
+      const box = $(id);
+      box.checked = state[stateKey];
+      box.addEventListener('change', (event) => {
+        state[stateKey] = event.target.checked;
+        writeScaffold(flag, event.target.checked);
+        refresh();
+      });
+    }
+    refillQueue();
     startWord();
     refresh();
     setupTransfer();
@@ -853,7 +964,8 @@
     function applyImport(incoming) {
       state.progress = incoming;
       state.recent = [];
-      nextLesson();
+      state.queue = [];
+      refillQueue();
       startWord();
       saveProgress();
       refresh();

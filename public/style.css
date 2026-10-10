@@ -152,6 +152,33 @@ body {
   color: var(--ink);
 }
 
+/* Mastery tier, as a border style distinct from the --conf fill color above - a fading
+   scaffold should be visible and legible, not a silent change the learner can't account for. */
+.key-chips li.tier-1 { border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+.key-chips li.tier-2 { border-style: double; border-width: 3px; border-color: var(--good); }
+
+/* Vanity trophy chips: bronze/silver/gold, purely derived, no state of their own. Kept
+   visually distinct from the confidence-gradient chips above so they read as trophies, not
+   live stats. */
+.key-chips li.vanity {
+  font-weight: 700;
+  border-style: solid;
+}
+.key-chips li.vanity.locked {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--line);
+  opacity: 0.5;
+}
+.key-chips li.vanity.bronze.earned { background: #cd7f32; color: #2a1a06; border-color: #a86425; }
+.key-chips li.vanity.silver.earned { background: #c0c0c8; color: #2a2a2e; border-color: #9a9aa2; }
+.key-chips li.vanity.gold.earned {
+  background: linear-gradient(135deg, #ffd76a, #e8a93a);
+  color: #3a2600;
+  border-color: #c98a1a;
+  box-shadow: 0 0 6px rgba(232, 169, 58, 0.6);
+}
+
 main {
   max-width: 960px;
   margin: 0 auto;
@@ -249,7 +276,9 @@ body.paused #practice .feedback {
    and keys run as three parallel lines. The layout is the same with Key hints on or off. */
 .stream {
   position: relative;
-  height: 184px;
+  /* Was sized for a 30-word lesson batch wrapping into a couple of rows; the live rolling
+     buffer only ever shows LOOKAHEAD (4) words ahead, so one row's worth of height is enough. */
+  height: 110px;
   overflow: hidden;
   display: flex;
   flex-wrap: wrap;
@@ -275,7 +304,6 @@ body.paused #practice .feedback {
   padding: 2px 6px;
   border-radius: 8px;
 }
-.cell.done { opacity: 0.45; }
 .cell.current { box-shadow: inset 0 0 0 1px var(--muted); }
 
 .w {
@@ -363,7 +391,32 @@ body.paused #practice .feedback {
 .hints-off .keyname,
 .hints-off .kc { display: none; }
 
+/* Prestige scaffold fading, least consequential first: stroke/key-name labels in the word
+   stream fade before anything else. Always just a default - the "Stroke labels" checkbox
+   overrides this by never applying the class in the first place (see app.js). */
+.scaffold-labels-off .cell .snd,
+.scaffold-labels-off .cell .kc { opacity: 0.18; }
+
+/* A scheduled diagnostic probe word (lessons.js's kinematicGap): tagged subtly so an
+   unexpectedly easy word mid-concerto doesn't read as a mistake in the algorithm. */
+.cell.probe .w::after {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: var(--target);
+  vertical-align: super;
+}
+
 .keyboard-wrap { display: grid; gap: 10px; justify-items: center; }
+
+/* Most consequential scaffold - fades last, and only once every unlocked key is comfortably
+   sustained, not merely at the mastery bar. Always just a default; the "Keyboard diagram"
+   checkbox overrides it by never applying these classes (see app.js). */
+.keyboard.faded { opacity: 0.35; transition: opacity 0.3s ease; }
+.keyboard.hidden { display: none; }
 
 .keyboard {
   display: grid;
