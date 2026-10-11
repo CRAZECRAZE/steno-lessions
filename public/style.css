@@ -177,6 +177,32 @@ body {
   box-shadow: 0 0 6px rgba(232, 169, 58, 0.6);
 }
 
+.key-chips li { cursor: default; outline-offset: 2px; }
+
+/* Shared tooltip for the key chips - replaces the native `title` popup (one line, slow,
+   browser-timed) with a short labeled stat breakdown that appears almost immediately. */
+.key-tooltip {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  background: var(--ink);
+  color: var(--bg);
+  font: 500 12px/1.5 ui-monospace, Menlo, monospace;
+  padding: 7px 10px;
+  border-radius: 7px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  transform: translateY(4px) scale(0.96);
+  transition: opacity 110ms ease, transform 110ms ease;
+  max-width: 220px;
+  white-space: nowrap;
+}
+.key-tooltip.show { opacity: 1; transform: translateY(0) scale(1); }
+.key-tooltip strong { display: block; font-size: 13px; }
+.key-tooltip .kt-sound { margin-left: 6px; opacity: 0.65; }
+.key-tooltip .kt-row { display: flex; justify-content: space-between; gap: 12px; }
+.key-tooltip .kt-row.muted { opacity: 0.75; }
+
 main {
   max-width: 960px;
   margin: 0 auto;

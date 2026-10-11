@@ -541,6 +541,74 @@
     $('lesson-note').textContent = `Next break: ${sinceMilestone}/${L.LESSON_SIZE}`;
   }
 
+  // A single shared tooltip for the key chips, replacing the native `title` attribute - native
+  // tooltips only ever show one line of plain text and pop up after a slow, browser-controlled
+  // delay. This one shows a short labeled breakdown (accuracy/speed/confidence) almost
+  // immediately, and tracks whichever chip is currently hovered or focused.
+  let keyTooltipEl = null;
+  let keyTooltipShowTimer = null;
+
+  function keyTooltip() {
+    if (!keyTooltipEl) {
+      keyTooltipEl = document.createElement('div');
+      keyTooltipEl.className = 'key-tooltip';
+      keyTooltipEl.setAttribute('role', 'tooltip');
+      document.body.appendChild(keyTooltipEl);
+    }
+    return keyTooltipEl;
+  }
+
+  function hideKeyTooltip() {
+    clearTimeout(keyTooltipShowTimer);
+    keyTooltip().classList.remove('show');
+  }
+
+  function showKeyTooltip(anchor, html) {
+    clearTimeout(keyTooltipShowTimer);
+    keyTooltipShowTimer = setTimeout(() => {
+      const tip = keyTooltip();
+      tip.innerHTML = html;
+      tip.classList.add('show');
+      const rect = anchor.getBoundingClientRect();
+      const tipRect = tip.getBoundingClientRect();
+      let left = rect.left + rect.width / 2 - tipRect.width / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
+      let top = rect.bottom + 8;
+      if (top + tipRect.height > window.innerHeight - 8) top = rect.top - tipRect.height - 8;
+      tip.style.left = `${left}px`;
+      tip.style.top = `${top}px`;
+    }, 80);
+  }
+
+  // Short delay (not zero) so brushing past several chips doesn't flash a tooltip per chip,
+  // but far shorter than any native title delay. tabIndex makes the chip keyboard-focusable so
+  // the same tooltip is reachable without a mouse.
+  function bindKeyTooltip(el, html) {
+    el.tabIndex = 0;
+    el.addEventListener('mouseenter', () => showKeyTooltip(el, html));
+    el.addEventListener('mouseleave', hideKeyTooltip);
+    el.addEventListener('focus', () => showKeyTooltip(el, html));
+    el.addEventListener('blur', hideKeyTooltip);
+  }
+
+  function keyTooltipHtml(progress, name) {
+    const slot = state.slotByName.get(name);
+    const header = `<strong>${escapeHtml(S.displayName(name))}</strong>` +
+      (slot ? `<span class="kt-sound">${escapeHtml(slot.sound)}</span>` : '');
+    const stat = progress.keys[name];
+    if (!stat || stat.ewmaMs === null || stat.samples < 5) {
+      return `${header}<div class="kt-row muted">Not calibrated yet - needs more reps.</div>`;
+    }
+    const wpmLike = Math.round(60000 / stat.ewmaMs);
+    const accuracy = Math.round(L.keyAccuracy(progress, name) * 100);
+    const confidence = Math.round(L.confidence(progress, name) * 100);
+    const tierLabel = ['Learning', 'Solid', 'Mastered'][L.masteryTier(progress, name)];
+    return `${header}` +
+      `<div class="kt-row"><span>Accuracy</span><span>${accuracy}%</span></div>` +
+      `<div class="kt-row"><span>Speed</span><span>${wpmLike} wpm</span></div>` +
+      `<div class="kt-row"><span>Confidence</span><span>${confidence}% (${tierLabel})</span></div>`;
+  }
+
   // Row 2: one chip per key, unlocked keys tinted by confidence, the focus key outlined, plus
   // a trailing row of vanity trophy chips - purely derived from mastery tiers, no state of
   // their own, so there is nothing to desync or corrupt on an old or partial save.
@@ -549,6 +617,9 @@
     const focus = L.focusKey(progress);
     const list = $('key-chips');
     list.textContent = '';
+    // The chips are rebuilt from scratch below, which would otherwise leave a tooltip pointing
+    // at a now-detached old chip if a refresh happens mid-hover.
+    hideKeyTooltip();
     L.KEY_ORDER.forEach((name, index) => {
       const chip = document.createElement('li');
       const unlocked = index < progress.unlocked;
@@ -559,7 +630,10 @@
       if (unlocked) chip.style.setProperty('--conf', (L.confidence(progress, name) ** 3).toFixed(2));
       if (unlocked) chip.classList.add(`tier-${L.masteryTier(progress, name)}`);
       chip.textContent = S.displayName(name);
-      chip.title = state.slotByName.get(name)?.sound || name;
+      const tooltipHtml = unlocked
+        ? keyTooltipHtml(progress, name)
+        : `<strong>${escapeHtml(S.displayName(name))}</strong><div class="kt-row muted">Locked - unlock earlier keys first.</div>`;
+      bindKeyTooltip(chip, tooltipHtml);
       list.appendChild(chip);
     });
     const unlockedNames = L.unlockedNames(progress);
@@ -572,7 +646,8 @@
       const chip = document.createElement('li');
       chip.className = `vanity ${badge.cls}${badge.earned ? ' earned' : ' locked'}`;
       chip.textContent = '★';
-      chip.title = badge.earned ? badge.label : `Locked: ${badge.label}`;
+      const label = badge.earned ? badge.label : `Locked: ${badge.label}`;
+      bindKeyTooltip(chip, `<div class="kt-row">${escapeHtml(label)}</div>`);
       list.appendChild(chip);
     }
   }
