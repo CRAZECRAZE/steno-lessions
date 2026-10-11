@@ -135,8 +135,8 @@
   // see lessons.js's kinematicGap for what it's checking.
   const PROBE_INTERVAL = 12;
   // How long the stream sits blank at a LESSON_SIZE milestone before the next stretch's first
-  // word(s) fade in - the one deliberately slow beat in an otherwise instant, continuous stream.
-  const BREAK_PAUSE_MS = 1000;
+  // word(s) fade in.
+  const BREAK_PAUSE_MS = 200;
 
   const currentWord = () => state.queue[0];
   // The stroke sequence to show: the first one that is still possible

@@ -286,20 +286,14 @@ body.paused #practice .feedback {
   padding-top: 2px;
 }
 
-/* The queue tapers to nothing right before a LESSON_SIZE milestone, then sits blank for a
-   beat - this is the one deliberately slow moment in an otherwise instant stream. */
-.stream.empty::after {
-  content: "Nice - take a breather.";
-  color: var(--muted);
-  font-size: 14px;
-}
-/* The first word(s) of the next stretch fade in slowly after that pause, instead of just
-   appearing - everything else in the stream still swaps instantly. */
+/* The first word(s) of the next stretch fade in after the queue's brief blank pause at a
+   LESSON_SIZE milestone, instead of just appearing - everything else in the stream still
+   swaps instantly. */
 @keyframes word-enter {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.cell.entering { animation: word-enter 1000ms ease; }
+.cell.entering { animation: word-enter 600ms ease; }
 
 .cell {
   display: grid;
