@@ -140,15 +140,17 @@
   const BREAK_PAUSE_MS = 200;
   // Decorative placeholders filling the rest of the stream past the LOOKAHEAD real words, so
   // the strip still reads as "a couple of lines of upcoming text" the way the old fixed-batch
-  // view did. They are not real upcoming words - we only ever generate LOOKAHEAD ahead, on
-  // purpose, so the complexity band can keep adapting live - but they ARE real dictionary
-  // entries with real strokes/sounds/keys, run through the exact same non-current cell
-  // rendering as a real queued word (renderStream below), then just visually faded out (see
-  // .cell.ghost in style.css). Refreshed once per completed word (refillGhostWords, called
-  // alongside refillQueue), never on every render, so nothing flickers/reshuffles mid-word.
-  // Hidden entirely near a break, where the real, shrinking taper count is the honest thing to
-  // show instead.
-  const GHOST_COUNT = 10;
+  // view did - 26, to round the visible strip out to the old 30-word lesson batch's size
+  // alongside LOOKAHEAD's 4 real words. They are not real upcoming words - we only ever
+  // generate LOOKAHEAD ahead, on purpose, so the complexity band can keep adapting live - but
+  // they ARE real dictionary entries with real strokes/sounds/keys, run through the exact same
+  // non-current cell rendering as a real queued word (renderStream below), then just visually
+  // faded out (see .cell.ghost in style.css). Generated once, at session start only
+  // (refillGhostWords, called from init/applyImport, deliberately NOT from wordDone) - they
+  // never change again for the rest of the session, not even word to word, so there is nothing
+  // to notice shifting underneath the real words. Hidden entirely near a break, where the
+  // real, shrinking taper count is the honest thing to show instead.
+  const GHOST_COUNT = 26;
 
   const currentWord = () => state.queue[0];
   // The stroke sequence to show: the first one that is still possible
@@ -342,7 +344,9 @@
   // Fills state.ghostWords with GHOST_COUNT real dictionary words for the decorative strip
   // past the real lookahead (see GHOST_COUNT above) - never pushed onto state.queue or
   // state.recent, never recorded as typed, since they're just a visual stand-in for "more is
-  // coming" and must not affect real word selection or history.
+  // coming" and must not affect real word selection or history. Called once at session start
+  // (init, applyImport) and never again - deliberately NOT called from wordDone, so the ghost
+  // strip is a fixed backdrop for the whole session, not something that reshuffles every word.
   function refillGhostWords() {
     state.ghostWords = [];
     const avoid = state.recent.concat(state.queue.map((word) => word.text));
@@ -843,7 +847,6 @@
         state.onBreak = false;
         state.justResumed = true;
         refillQueue();
-        refillGhostWords();
         startWord();
         refresh();
       }, BREAK_PAUSE_MS);
@@ -851,7 +854,6 @@
     }
 
     refillQueue();
-    refillGhostWords();
     startWord();
     saveProgress();
     refresh();
