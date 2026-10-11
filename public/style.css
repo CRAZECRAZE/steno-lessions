@@ -19,6 +19,9 @@
   --down: #f2b84b;
   --good: #2e8b57;
   --bad: #c0392b;
+  /* Atkinson Hyperlegible keeps easily-confused letterforms (notably uppercase P vs R) clearly
+     distinct - used anywhere a bare steno key letter is shown on its own, not for body text. */
+  --key-font: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -361,6 +364,7 @@ body.paused #practice .feedback {
   display: flex;
   gap: 1px;
   padding: 0 6px;
+  font-family: var(--key-font);
   font-size: 23px;
   font-weight: 700;
   color: var(--ink);
@@ -516,6 +520,7 @@ body.paused #practice .feedback {
   left: 0;
   right: 0;
   text-align: center;
+  font-family: var(--key-font);
   font-size: 19px;
   font-weight: 700;
 }
@@ -526,6 +531,7 @@ body.paused #practice .feedback {
   left: 0;
   right: 0;
   text-align: center;
+  font-family: var(--key-font);
   font-size: 11px;
   line-height: 1;
   font-weight: 600;
@@ -551,6 +557,7 @@ body.paused #practice .feedback {
   left: 0;
   right: 0;
   text-align: center;
+  font-family: var(--key-font);
   font-size: 10px;
   line-height: 1;
   color: inherit;
