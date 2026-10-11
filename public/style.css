@@ -289,27 +289,16 @@ body.paused #practice .feedback {
   padding-top: 2px;
 }
 
-/* Decorative placeholders past the real, generated words - the exact same cell topology as a
-   real word (word line, sound line, keys line, same font/size/weight), just jibberish letters
-   super dimmed, drifting slowly in place, so it blends in rather than looking like a foreign
-   shape. Deliberately NOT jittery or randomized letter-like noise (a la Minecraft's
-   enchantment text): the jibberish letters are generated once in app.js and never reshuffle,
-   so only the slow, staggered float animation moves - calm and elusive rather than something
-   fighting for attention. */
+/* Decorative placeholders past the real, generated words - rendered by renderStream through
+   the exact same cell-building code as a real upcoming word (app.js merges state.ghostWords,
+   real dictionary entries, into the same loop), so the shape, coloring and spacing are
+   pixel-identical to a real word. This rule is the only thing that makes a ghost cell read as
+   a ghost: recolor every pixel to white (regardless of the real word/sound-group colors
+   underneath) and fade it to 10% opacity. Static - no animation, no motion. */
 .cell.ghost {
   pointer-events: none;
-  animation: ghost-drift 4.6s ease-in-out infinite;
-  animation-delay: var(--delay, 0s);
-}
-.cell.ghost .w,
-.cell.ghost .snd,
-.cell.ghost .kc {
-  color: var(--muted);
-  opacity: 0.22;
-}
-@keyframes ghost-drift {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
+  filter: brightness(0) invert(1);
+  opacity: 0.1;
 }
 
 /* The first word(s) of the next stretch fade in after the queue's brief blank pause at a

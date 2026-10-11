@@ -104,6 +104,7 @@
     hints: readHints(),
     keyEls: new Map(), // event.code -> element
     queue: [], // live, rolling buffer of upcoming words - queue[0] is the one being typed
+    ghostWords: [], // decorative real words past the queue, never typed or recorded - see GHOST_COUNT
     recent: [], // words used lately, so the queue does not repeat them
     queuedCount: 0, // words pushed onto the queue this session, for the probe schedule
     lastLessonStats: null, // windowStats as of the last LESSON_SIZE-word milestone, for HUD deltas
@@ -139,27 +140,15 @@
   const BREAK_PAUSE_MS = 200;
   // Decorative placeholders filling the rest of the stream past the LOOKAHEAD real words, so
   // the strip still reads as "a couple of lines of upcoming text" the way the old fixed-batch
-  // view did - they are not real words (we only ever generate LOOKAHEAD ahead, on purpose, so
-  // the complexity band can keep adapting live). Each one has the exact same three-line shape
-  // as a real word (word / sound / keys), just jibberish letters, super dimmed. Hidden near a
-  // break, where the real, shrinking taper count is the honest thing to show instead.
-  // Generated once, not on every render, so the letters never flicker/reshuffle - that erratic
-  // look is exactly what this is meant to avoid.
-  const GHOST_COUNT = 14;
-  const JIBBERISH_LETTERS = 'abcdefghijklmnopqrstuvwxyz';
-  function randomLetters(min, max) {
-    const len = min + Math.floor(Math.random() * (max - min + 1));
-    let out = '';
-    for (let i = 0; i < len; i++) {
-      out += JIBBERISH_LETTERS[Math.floor(Math.random() * JIBBERISH_LETTERS.length)];
-    }
-    return out;
-  }
-  const GHOST_CELLS = Array.from({ length: GHOST_COUNT }, () => ({
-    word: randomLetters(3, 8),
-    sound: randomLetters(2, 5),
-    keys: `${randomLetters(1, 2)} ${randomLetters(1, 2)}`,
-  }));
+  // view did. They are not real upcoming words - we only ever generate LOOKAHEAD ahead, on
+  // purpose, so the complexity band can keep adapting live - but they ARE real dictionary
+  // entries with real strokes/sounds/keys, run through the exact same non-current cell
+  // rendering as a real queued word (renderStream below), then just visually faded out (see
+  // .cell.ghost in style.css). Refreshed once per completed word (refillGhostWords, called
+  // alongside refillQueue), never on every render, so nothing flickers/reshuffles mid-word.
+  // Hidden entirely near a break, where the real, shrinking taper count is the honest thing to
+  // show instead.
+  const GHOST_COUNT = 10;
 
   const currentWord = () => state.queue[0];
   // The stroke sequence to show: the first one that is still possible
@@ -350,6 +339,20 @@
     }
   }
 
+  // Fills state.ghostWords with GHOST_COUNT real dictionary words for the decorative strip
+  // past the real lookahead (see GHOST_COUNT above) - never pushed onto state.queue or
+  // state.recent, never recorded as typed, since they're just a visual stand-in for "more is
+  // coming" and must not affect real word selection or history.
+  function refillGhostWords() {
+    state.ghostWords = [];
+    const avoid = state.recent.concat(state.queue.map((word) => word.text));
+    for (let i = 0; i < GHOST_COUNT; i++) {
+      const word = L.nextWord(state.data.words, state.progress, state.slotIndex, { avoid });
+      if (!word) break;
+      state.ghostWords.push(word);
+    }
+  }
+
   // Only stroke sequences that use unlocked keys are shown, so a word never asks for a locked key
   function startWord() {
     const word = currentWord();
@@ -378,12 +381,25 @@
     state.justResumed = false;
     const mask = unlockedMask();
     let current = null;
-    for (let i = 0; i < state.queue.length; i++) {
-      const word = state.queue[i];
-      const isCurrent = i === 0;
+    // The decorative ghost strip (see GHOST_COUNT/refillGhostWords above) is rendered through
+    // this exact same loop, as real dictionary words - never real queued ones, never typed or
+    // recorded - so a ghost cell's shape, coloring and spacing is pixel-identical to a real
+    // upcoming (non-current) word. Only the 'ghost' class differs, which style.css uses to
+    // fade the whole cell out - no separate rendering path to drift out of sync with this one.
+    // Suppressed entirely near a break, where the real, shrinking taper count is the honest
+    // thing to show instead.
+    const items = state.queue.map((word) => ({ word, isGhost: false }));
+    if (!nearBreak()) {
+      for (const word of state.ghostWords) items.push({ word, isGhost: true });
+    }
+    for (let i = 0; i < items.length; i++) {
+      const { word, isGhost } = items[i];
+      const isCurrent = !isGhost && i === 0;
       const strokes = isCurrent ? shownStrokes() : L.displayVariants(word, mask)[0] || [];
       const cell = document.createElement('div');
-      cell.className = `cell${isCurrent ? ' current' : ''}${word.isProbe ? ' probe' : ''}${entering ? ' entering' : ''}`;
+      cell.className = `cell${isCurrent ? ' current' : ''}${word.isProbe ? ' probe' : ''}` +
+        `${entering && !isGhost ? ' entering' : ''}${isGhost ? ' ghost' : ''}`;
+      if (isGhost) cell.setAttribute('aria-hidden', 'true');
       cell.style.gridTemplateColumns = `repeat(${Math.max(1, strokes.length)}, auto)`;
       const wordEl = document.createElement('span');
       wordEl.className = 'w';
@@ -482,35 +498,6 @@
       });
       if (isCurrent) current = cell;
       stream.appendChild(cell);
-    }
-    // Ghost placeholders: not real generated words (we deliberately only ever generate
-    // LOOKAHEAD ahead), just the same three-line topology as a real word (word, sound, keys),
-    // filled with jibberish and super dimmed, drifting slowly in place, so the strip doesn't
-    // visually dead-end right after the real words. Skipped entirely near a break, where the
-    // honest thing to show is the real, shrinking count - never a placeholder.
-    if (!nearBreak()) {
-      for (let g = 0; g < GHOST_COUNT; g++) {
-        const ghostData = GHOST_CELLS[g % GHOST_CELLS.length];
-        const cell = document.createElement('div');
-        cell.className = 'cell ghost';
-        cell.setAttribute('aria-hidden', 'true');
-        cell.style.setProperty('--delay', `${-(g * 0.41).toFixed(2)}s`);
-        const wordEl = document.createElement('span');
-        wordEl.className = 'w';
-        wordEl.textContent = ghostData.word;
-        cell.appendChild(wordEl);
-        const soundEl = document.createElement('span');
-        soundEl.className = 'snd';
-        soundEl.style.gridColumn = '1';
-        soundEl.textContent = ghostData.sound;
-        cell.appendChild(soundEl);
-        const keysEl = document.createElement('span');
-        keysEl.className = 'kc';
-        keysEl.style.gridColumn = '1';
-        keysEl.textContent = ghostData.keys;
-        cell.appendChild(keysEl);
-        stream.appendChild(cell);
-      }
     }
     if (current) {
       // Keep the word being typed in view as the rolling buffer fills the box.
@@ -856,6 +843,7 @@
         state.onBreak = false;
         state.justResumed = true;
         refillQueue();
+        refillGhostWords();
         startWord();
         refresh();
       }, BREAK_PAUSE_MS);
@@ -863,6 +851,7 @@
     }
 
     refillQueue();
+    refillGhostWords();
     startWord();
     saveProgress();
     refresh();
@@ -1008,6 +997,7 @@
       });
     }
     refillQueue();
+    refillGhostWords();
     startWord();
     refresh();
     setupTransfer();
@@ -1032,6 +1022,7 @@
       state.queue = [];
       applyScaffoldBoxes();
       refillQueue();
+      refillGhostWords();
       startWord();
       saveProgress();
       refresh();
