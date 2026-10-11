@@ -274,9 +274,11 @@ body.paused #practice .feedback {
    and keys run as three parallel lines. The layout is the same with Key hints on or off. */
 .stream {
   position: relative;
-  /* Was sized for a 30-word lesson batch wrapping into a couple of rows; the live rolling
-     buffer only ever shows LOOKAHEAD (4) words ahead, so one row's worth of height is enough. */
-  height: 110px;
+  /* Tall enough for the real words plus a second row of ghost placeholders (see .ghost
+     below). No container-level fade mask here on purpose - on a narrow viewport the real
+     words themselves can wrap onto a second line, and a mask positioned by percentage would
+     have no way to tell that line apart from the ghost row below it and would clip real text. */
+  height: 160px;
   overflow: hidden;
   display: flex;
   flex-wrap: wrap;
@@ -284,6 +286,29 @@ body.paused #practice .feedback {
   align-items: flex-start;
   gap: 8px 14px;
   padding-top: 2px;
+}
+
+/* Decorative placeholders past the real, generated words - never real text, just a soft,
+   slowly drifting suggestion that more is coming. Deliberately NOT jittery or randomized
+   letter-like noise (a la Minecraft's enchantment text): one slow, staggered float/fade loop,
+   so it reads as calm and elusive rather than something fighting for attention. Each one fades
+   a little more than the last via --base (set per-ghost in app.js), so the strip reads as
+   trailing off into mist further out, regardless of where it happens to wrap onto a new row. */
+.ghost {
+  height: 30px;
+  border-radius: 10px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--muted) 10%, transparent),
+    color-mix(in srgb, var(--muted) 28%, transparent)
+  );
+  pointer-events: none;
+  animation: ghost-drift 4.4s ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+@keyframes ghost-drift {
+  0%, 100% { transform: translateY(0); opacity: calc(var(--base, 0.5) * 0.5); }
+  50% { transform: translateY(-5px); opacity: var(--base, 0.5); }
 }
 
 /* The first word(s) of the next stretch fade in after the queue's brief blank pause at a

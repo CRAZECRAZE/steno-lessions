@@ -137,6 +137,13 @@
   // How long the stream sits blank at a LESSON_SIZE milestone before the next stretch's first
   // word(s) fade in.
   const BREAK_PAUSE_MS = 200;
+  // Decorative placeholders filling the rest of the stream past the LOOKAHEAD real words, so
+  // the strip still reads as "a couple of lines of upcoming text" the way the old fixed-batch
+  // view did - they are not real words (we only ever generate LOOKAHEAD ahead, on purpose, so
+  // the complexity band can keep adapting live), just a soft, slow-drifting suggestion that
+  // more is coming. Hidden near a break, where the real taper count is the honest thing to show.
+  const GHOST_COUNT = 12;
+  const GHOST_WIDTHS = [46, 70, 56, 82, 60, 50, 74, 64];
 
   const currentWord = () => state.queue[0];
   // The stroke sequence to show: the first one that is still possible
@@ -302,6 +309,11 @@
   function targetQueueDepth() {
     return state.onBreak ? 0 : Math.min(LOOKAHEAD, wordsUntilBreak());
   }
+  // True once the taper toward a break has actually started (or we're sitting in the pause
+  // itself) - the ghost placeholders below only make sense while we're genuinely LOOKAHEAD
+  // words deep in a normal stretch; this close to a break the real, shrinking count is the
+  // honest thing on screen, so no placeholders should paper over it.
+  const nearBreak = () => state.onBreak || wordsUntilBreak() <= LOOKAHEAD;
 
   // Tops the live queue back up to its target depth, one word at a time, each read fresh off
   // the current complexity band - so a shift in the focus key's confidence (or a probe coming
@@ -454,6 +466,23 @@
       });
       if (isCurrent) current = cell;
       stream.appendChild(cell);
+    }
+    // Ghost placeholders: not real generated words (we deliberately only ever generate
+    // LOOKAHEAD ahead), just a slow, drifting suggestion that more is coming, so the strip
+    // doesn't visually dead-end right after the real words. Skipped entirely near a break,
+    // where the honest thing to show is the real, shrinking count - never a placeholder.
+    if (!nearBreak()) {
+      for (let g = 0; g < GHOST_COUNT; g++) {
+        const ghost = document.createElement('div');
+        ghost.className = 'ghost';
+        ghost.setAttribute('aria-hidden', 'true');
+        ghost.style.width = `${GHOST_WIDTHS[g % GHOST_WIDTHS.length]}px`;
+        ghost.style.setProperty('--delay', `${-(g * 0.41).toFixed(2)}s`);
+        // Further-out placeholders fade a little more, so the strip trails off into mist
+        // rather than ending in a hard row of identically-bright blobs.
+        ghost.style.setProperty('--base', String(Math.max(0.2, 0.55 - g * 0.03)));
+        stream.appendChild(ghost);
+      }
     }
     if (current) {
       // Keep the word being typed in view as the rolling buffer fills the box.
