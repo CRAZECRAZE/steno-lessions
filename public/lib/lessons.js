@@ -63,6 +63,17 @@
   // blended speed. Isolated reps should always be comfortably faster; a gap below this means
   // word complexity is not the real bottleneck - raw chord-formation speed is.
   const HEALTHY_PROBE_GAP = 0.2;
+  // How hard word weighting leans toward a key's own weakness: a fully unknown key (weakness
+  // 1) multiplies a word's weight by (1 + WEAKNESS_GAIN); a fully confident key (weakness 0)
+  // leaves it untouched. Squared in `keyWeakness` so a clearly weak key pulls much harder than
+  // a merely imperfect one, instead of every non-mastered key crowding in evenly.
+  const WEAKNESS_GAIN = 3;
+  // Correct reps (recordChord samples) during which a freshly-unlocked key is treated as
+  // maximally weak for word selection, regardless of how fast its measured `confidence`
+  // happens to climb. confidence can read near 1 after as few as SAMPLES_TO_LEARN good reps,
+  // which is not enough real practice for the key to have earned losing its selection
+  // priority to whichever other key is now the single lowest-confidence one.
+  const NEW_KEY_GRACE_SAMPLES = 15;
 
   // Words per minute needed to unlock the next key. A flat bar for every key - per-key
   // accuracy gating (KEY_ACCURACY_TARGET) is what actually proves a new key is mastered,
@@ -369,14 +380,40 @@
       .map((item) => item.strokes);
   }
 
+  // 0 (fully known) to 1 (fully unknown): how much a key's own weakness should pull word
+  // selection toward it. A key still inside its new-key grace period (never attempted, or
+  // under NEW_KEY_GRACE_SAMPLES correct reps so far) reads as maximally weak outright, rather
+  // than trusting `confidence`'s fast-ramping early reading.
+  function keyWeakness(progress, name) {
+    const stat = progress.keys[name];
+    if (!stat || stat.samples < NEW_KEY_GRACE_SAMPLES) return 1;
+    return 1 - confidence(progress, name);
+  }
+
+  // How much a word's weight should scale up for the unlocked keys its stroke actually uses -
+  // every one of them, not just the single globally-weakest key, so a word touching two
+  // merely-shaky keys gets compounded priority instead of needing to wait for one key to
+  // become the sole focus. Squared per key (see WEAKNESS_GAIN) so weakness compounds instead
+  // of just adding up.
+  function weaknessBoost(progress, bits, slotIndex) {
+    let boost = 1;
+    for (const name of unlockedNames(progress)) {
+      if (!(bits & (1 << slotIndex.get(name)))) continue;
+      const weak = keyWeakness(progress, name);
+      boost *= 1 + WEAKNESS_GAIN * weak * weak;
+    }
+    return boost;
+  }
+
   // Picks words for the stream. Only words with at least one stroke sequence that uses
-  // unlocked keys are eligible. Words that use the focus key come up more often, and words
-  // in `avoid` (recently typed) are skipped where possible. `random` returns [0, 1).
-  // `options.allowMask`, if given, is used in place of the unlocked mask to decide which
-  // words are eligible (but is expected to already be a subset of it) - this is how an etude
-  // pick restricts itself to the focus key plus only already-mastered keys. `options.bonusFn`,
-  // if given, multiplies a word's weight by `bonusFn(usable)` - this is how a concerto pick
-  // rewards words that recombine several recently-unlocked keys together.
+  // unlocked keys are eligible. Words touching weaker unlocked keys come up more often (see
+  // `weaknessBoost`), and words in `avoid` (recently typed) are skipped where possible.
+  // `random` returns [0, 1). `options.allowMask`, if given, is used in place of the unlocked
+  // mask to decide which words are eligible (but is expected to already be a subset of it) -
+  // this is how an etude pick restricts itself to the focus key plus only already-mastered
+  // keys. `options.bonusFn`, if given, multiplies a word's weight by `bonusFn(usable)` - this
+  // is how a concerto pick rewards words that recombine several recently-unlocked keys
+  // together.
   function pickWords(words, progress, slotIndex, options = {}) {
     const random = options.random || Math.random;
     const count = options.count || LESSON_SIZE;
@@ -385,8 +422,6 @@
     const mask = unlockedMask(progress, slotIndex);
     const eligibilityMask = options.allowMask !== undefined ? options.allowMask & mask : mask;
     const bonusFn = options.bonusFn || (() => 1);
-    const focus = focusKey(progress);
-    const focusBit = focus ? 1 << slotIndex.get(focus) : 0;
 
     const eligible = [];
     for (const word of words) {
@@ -402,7 +437,8 @@
       // Plover's dictionary has no word frequencies, so combine a real frequency list with
       // the length/stroke heuristics: medium length, one stroke, and actually common words win.
       let weight = lengthWeight(word.text.length) * strokeWeight(usable[0].length) * WordFreq.freqWeight(word.text);
-      if (usable.some((strokes) => strokes.some((bits) => bits & focusBit))) weight *= 4;
+      const bits = usable[0].reduce((combined, strokeBits) => combined | strokeBits, 0);
+      weight *= weaknessBoost(progress, bits, slotIndex);
       weight *= bonusFn(usable);
       return { word, weight };
     });
@@ -507,6 +543,8 @@
     CONCERTO_MIN,
     PROBE_WINDOW,
     HEALTHY_PROBE_GAP,
+    WEAKNESS_GAIN,
+    NEW_KEY_GRACE_SAMPLES,
     emptyProgress,
     normalize,
     unlockedNames,
@@ -520,6 +558,7 @@
     wpmTarget,
     WPM_TARGET,
     confidence,
+    keyWeakness,
     masteryTier,
     scaffoldTier,
     scaffoldVisible,

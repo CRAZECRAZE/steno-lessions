@@ -228,6 +228,33 @@ test('pickWords skips recently typed words when it can', () => {
   assert.ok(!picked.some((word) => avoid.includes(word.text)));
 });
 
+test('keyWeakness treats an unattempted key as fully weak, and a freshly-unlocked key as fully weak during its grace period even if confidence already reads high', () => {
+  const progress = lessons.emptyProgress();
+  assert.equal(lessons.keyWeakness(progress, 'A-'), 1, 'never attempted');
+  for (let i = 0; i < 5; i++) lessons.recordChord(progress, ['A-'], 400, true);
+  assert.ok(lessons.confidence(progress, 'A-') > 0.9, 'confidence alone already reads as high');
+  assert.equal(lessons.keyWeakness(progress, 'A-'), 1, 'still within its grace period');
+  for (let i = 0; i < lessons.NEW_KEY_GRACE_SAMPLES; i++) lessons.recordChord(progress, ['A-'], 400, true);
+  assert.ok(lessons.keyWeakness(progress, 'A-') < 1, 'grace period has elapsed, real confidence now counts');
+});
+
+test('pickWords weighs every unlocked key\'s own weakness, not just a single focus key', () => {
+  const progress = lessons.emptyProgress();
+  // K- is long mastered; A- has never been attempted. Both are unlocked (within START_KEYS),
+  // so neither is forced into the etude path - this is the plain weighting pickWords itself
+  // does, which used to only ever boost the single globally-weakest ("focus") key by a flat
+  // amount. Here two equally-weighted (length, stroke count, unknown-word frequency) made-up
+  // words differ only in which key their stroke uses.
+  for (let i = 0; i < 30; i++) lessons.recordChord(progress, ['K-'], 400, true);
+  const touchesUnknownKey = { text: 'zzzz', variants: [[1 << slotIndex.get('A-')]] };
+  const touchesMasteredKey = { text: 'yyyy', variants: [[1 << slotIndex.get('K-')]] };
+  const picked = lessons.pickWords([touchesUnknownKey, touchesMasteredKey], progress, slotIndex, {
+    random: () => 0.5,
+    count: 1,
+  });
+  assert.equal(picked[0].text, 'zzzz', 'the word touching the still-unknown key should win the tie');
+});
+
 test('complexityScore/complexityBand read the focus key\'s own confidence as the etude<->concerto dial', () => {
   const progress = lessons.emptyProgress();
   // Fresh progress: no samples anywhere yet, so the focus key has 0 confidence - etude band.
