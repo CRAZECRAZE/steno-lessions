@@ -63,11 +63,13 @@
   // blended speed. Isolated reps should always be comfortably faster; a gap below this means
   // word complexity is not the real bottleneck - raw chord-formation speed is.
   const HEALTHY_PROBE_GAP = 0.2;
-  // How hard word weighting leans toward a key's own weakness: a fully unknown key (weakness
-  // 1) multiplies a word's weight by (1 + WEAKNESS_GAIN); a fully confident key (weakness 0)
-  // leaves it untouched. Squared in `keyWeakness` so a clearly weak key pulls much harder than
-  // a merely imperfect one, instead of every non-mastered key crowding in evenly.
-  const WEAKNESS_GAIN = 3;
+  // How hard word weighting leans toward a chord's single weakest unlocked key: at weakness 1
+  // (fully unknown/inaccurate) a word's weight multiplies by (1 + WEAKNESS_GAIN); at weakness 0
+  // it's untouched. Squared in `weaknessBoost` so the curve favors genuinely extreme weakness
+  // much more than merely moderate weakness, instead of scaling linearly with it. Tuned
+  // (empirically, against real play data) so a key sitting around 60% accuracy while
+  // everything else is 85%+ lands in roughly the 50% range of words it's eligible for.
+  const WEAKNESS_GAIN = 150;
   // Correct reps (recordChord samples) during which a freshly-unlocked key is treated as
   // maximally weak for word selection, regardless of how fast its measured `confidence`
   // happens to climb. confidence can read near 1 after as few as SAMPLES_TO_LEARN good reps,
@@ -380,29 +382,36 @@
       .map((item) => item.strokes);
   }
 
-  // 0 (fully known) to 1 (fully unknown): how much a key's own weakness should pull word
-  // selection toward it. A key still inside its new-key grace period (never attempted, or
-  // under NEW_KEY_GRACE_SAMPLES correct reps so far) reads as maximally weak outright, rather
-  // than trusting `confidence`'s fast-ramping early reading.
+  // 0 (fully accurate) to 1 (always wrong): how much a key's own weakness should pull word
+  // selection toward it. Deliberately the *raw* accuracy deficit, not `confidence` - confidence
+  // normalizes accuracy against KEY_ACCURACY_TARGET (0.8) and multiplies in a speed term that
+  // saturates to 1 almost immediately, which together compress a real, meaningful accuracy
+  // problem (e.g. 60% when everything else is 85%+) down to a barely-there signal. Word
+  // selection should react to the actual error rate, not that squashed mastery metric. A key
+  // still inside its new-key grace period (never attempted, or under NEW_KEY_GRACE_SAMPLES
+  // correct reps so far) reads as maximally weak outright, rather than trusting an early
+  // accuracy reading from too few attempts.
   function keyWeakness(progress, name) {
     const stat = progress.keys[name];
     if (!stat || stat.samples < NEW_KEY_GRACE_SAMPLES) return 1;
-    return 1 - confidence(progress, name);
+    return 1 - keyAccuracy(progress, name);
   }
 
-  // How much a word's weight should scale up for the unlocked keys its stroke actually uses -
-  // every one of them, not just the single globally-weakest key, so a word touching two
-  // merely-shaky keys gets compounded priority instead of needing to wait for one key to
-  // become the sole focus. Squared per key (see WEAKNESS_GAIN) so weakness compounds instead
-  // of just adding up.
+  // How much a word's weight should scale up for its single weakest unlocked key - the worst
+  // key present in the stroke, not a product over every key it uses. A chord that happens to
+  // fire several keys at once (many steno briefs do: SKWR, TPH, AO...) must not get a bigger
+  // boost just for using more keys - every real key has *some* nonzero weakness most of the
+  // time, so multiplying a per-key factor across a 4-5 key chord compounds into a huge,
+  // meaningless boost that has nothing to do with any of those keys actually being weak. Using
+  // the max keeps the boost keyed to how bad the worst key in the chord is, independent of how
+  // many keys it has.
   function weaknessBoost(progress, bits, slotIndex) {
-    let boost = 1;
+    let maxWeak = 0;
     for (const name of unlockedNames(progress)) {
       if (!(bits & (1 << slotIndex.get(name)))) continue;
-      const weak = keyWeakness(progress, name);
-      boost *= 1 + WEAKNESS_GAIN * weak * weak;
+      maxWeak = Math.max(maxWeak, keyWeakness(progress, name));
     }
-    return boost;
+    return 1 + WEAKNESS_GAIN * maxWeak * maxWeak;
   }
 
   // Picks words for the stream. Only words with at least one stroke sequence that uses
@@ -559,6 +568,7 @@
     WPM_TARGET,
     confidence,
     keyWeakness,
+    weaknessBoost,
     masteryTier,
     scaffoldTier,
     scaffoldVisible,
