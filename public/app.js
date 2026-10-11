@@ -114,7 +114,10 @@
     lastChordEnd: null,
     failures: [], // wrong attempts still being drilled - tracked for retry/undo, not displayed
     previewBits: 0, // the last stroke's chord, kept after release so the preview survives it
-    lessonTransitionTimer: null,
+    onBreak: false, // true only during the blank pause right at a LESSON_SIZE milestone
+    justResumed: false, // one-shot: true for the single render right after a break, so the
+    // first word(s) of the next stretch get the slow entrance animation instead of just appearing
+    breakTimer: null,
     releaseTimers: new Map(), // event.code -> pending debounced-release timeout id
     drill: 0,
     typed: 0, // words finished this session
@@ -131,6 +134,9 @@
   // Every this many words, one is a forced, out-of-band diagnostic probe on the focus key -
   // see lessons.js's kinematicGap for what it's checking.
   const PROBE_INTERVAL = 12;
+  // How long the stream sits blank at a LESSON_SIZE milestone before the next stretch's first
+  // word(s) fade in - the one deliberately slow beat in an otherwise instant, continuous stream.
+  const BREAK_PAUSE_MS = 1000;
 
   const currentWord = () => state.queue[0];
   // The stroke sequence to show: the first one that is still possible
@@ -283,11 +289,26 @@
     }
   }
 
-  // Tops the live queue back up to LOOKAHEAD, one word at a time, each read fresh off the
-  // current complexity band - so a shift in the focus key's confidence (or a probe coming
+  // Words left until the next cosmetic LESSON_SIZE milestone. Right after one (totalTyped a
+  // clean multiple), that's a full LESSON_SIZE away again, not zero - the zero-ahead moment
+  // is handled separately, by state.onBreak, not by this running purely off totalTyped.
+  function wordsUntilBreak() {
+    const pos = state.progress.totalTyped % L.LESSON_SIZE;
+    return pos === 0 ? L.LESSON_SIZE : L.LESSON_SIZE - pos;
+  }
+  // The queue winds down to nothing right as a break approaches (so the stream visibly tapers
+  // 4, 3, 2, 1 words ahead instead of jumping straight from a full lookahead to blank), and sits
+  // at exactly 0 for the pause itself.
+  function targetQueueDepth() {
+    return state.onBreak ? 0 : Math.min(LOOKAHEAD, wordsUntilBreak());
+  }
+
+  // Tops the live queue back up to its target depth, one word at a time, each read fresh off
+  // the current complexity band - so a shift in the focus key's confidence (or a probe coming
   // due) can change the very next word, not just at an old-style lesson boundary.
   function refillQueue() {
-    while (state.queue.length < LOOKAHEAD) {
+    const target = targetQueueDepth();
+    while (state.queue.length < target) {
       state.queuedCount += 1;
       const isProbe = state.queuedCount % PROBE_INTERVAL === 0;
       const word = L.nextWord(state.data.words, state.progress, state.slotIndex, {
@@ -322,6 +343,11 @@
   function renderStream() {
     const stream = $('stream');
     stream.textContent = '';
+    stream.classList.toggle('empty', state.queue.length === 0);
+    // One-shot: only the render right after a break's blank pause gets the slow entrance -
+    // every later re-render (every keystroke) must not keep replaying it.
+    const entering = state.justResumed;
+    state.justResumed = false;
     const mask = unlockedMask();
     let current = null;
     for (let i = 0; i < state.queue.length; i++) {
@@ -329,7 +355,7 @@
       const isCurrent = i === 0;
       const strokes = isCurrent ? shownStrokes() : L.displayVariants(word, mask)[0] || [];
       const cell = document.createElement('div');
-      cell.className = `cell${isCurrent ? ' current' : ''}${word.isProbe ? ' probe' : ''}`;
+      cell.className = `cell${isCurrent ? ' current' : ''}${word.isProbe ? ' probe' : ''}${entering ? ' entering' : ''}`;
       cell.style.gridTemplateColumns = `repeat(${Math.max(1, strokes.length)}, auto)`;
       const wordEl = document.createElement('span');
       wordEl.className = 'w';
@@ -757,28 +783,32 @@
     }
 
     // Purely cosmetic break-reminder, every LESSON_SIZE words - a human milestone, not a
-    // generation or judging boundary (both already run continuously, above).
+    // generation or judging boundary (both already run continuously, above). The queue has
+    // already tapered itself down to nothing right on this word (targetQueueDepth), so the
+    // stream is already blank below; this just holds it blank for a beat, then lets the next
+    // stretch's first word(s) fade in, instead of refilling instantly.
     if (state.progress.totalTyped % L.LESSON_SIZE === 0) {
       state.lastLessonStats = L.windowStats(state.progress);
       L.recordLesson(state.progress, state.lastLessonStats);
-      playLessonTransition();
+      state.onBreak = true;
+      startWord();
+      saveProgress();
+      refresh();
+      clearTimeout(state.breakTimer);
+      state.breakTimer = setTimeout(() => {
+        state.onBreak = false;
+        state.justResumed = true;
+        refillQueue();
+        startWord();
+        refresh();
+      }, BREAK_PAUSE_MS);
+      return;
     }
 
     refillQueue();
     startWord();
     saveProgress();
     refresh();
-  }
-
-  // A brief slide-down as a new lesson's words come in, so one lesson visibly ends and the
-  // next begins instead of the word stream just silently swapping its contents.
-  function playLessonTransition() {
-    const stream = $('stream');
-    stream.classList.remove('lesson-enter');
-    void stream.offsetWidth; // restart the animation even if one is still finishing
-    stream.classList.add('lesson-enter');
-    clearTimeout(state.lessonTransitionTimer);
-    state.lessonTransitionTimer = setTimeout(() => stream.classList.remove('lesson-enter'), 500);
   }
 
   // Drops the chord being typed and stops the word clock, so time away from the page is not counted

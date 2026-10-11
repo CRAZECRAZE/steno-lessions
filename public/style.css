@@ -286,12 +286,20 @@ body.paused #practice .feedback {
   padding-top: 2px;
 }
 
-/* A brief slide-down as a new lesson's words come in, so lessons read as distinct batches */
-@keyframes lesson-enter {
-  from { opacity: 0; transform: translateY(-14px); }
+/* The queue tapers to nothing right before a LESSON_SIZE milestone, then sits blank for a
+   beat - this is the one deliberately slow moment in an otherwise instant stream. */
+.stream.empty::after {
+  content: "Nice - take a breather.";
+  color: var(--muted);
+  font-size: 14px;
+}
+/* The first word(s) of the next stretch fade in slowly after that pause, instead of just
+   appearing - everything else in the stream still swaps instantly. */
+@keyframes word-enter {
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.stream.lesson-enter { animation: lesson-enter 500ms ease; }
+.cell.entering { animation: word-enter 1000ms ease; }
 
 .cell {
   display: grid;
