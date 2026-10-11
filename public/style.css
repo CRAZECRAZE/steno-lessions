@@ -288,27 +288,24 @@ body.paused #practice .feedback {
   padding-top: 2px;
 }
 
-/* Decorative placeholders past the real, generated words - never real text, just a soft,
-   slowly drifting suggestion that more is coming. Deliberately NOT jittery or randomized
-   letter-like noise (a la Minecraft's enchantment text): one slow, staggered float/fade loop,
-   so it reads as calm and elusive rather than something fighting for attention. Each one fades
-   a little more than the last via --base (set per-ghost in app.js), so the strip reads as
-   trailing off into mist further out, regardless of where it happens to wrap onto a new row. */
-.ghost {
-  height: 30px;
-  border-radius: 10px;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--muted) 10%, transparent),
-    color-mix(in srgb, var(--muted) 28%, transparent)
-  );
+/* Decorative placeholders past the real, generated words - the exact same cell/word styling
+   as a real word (same font, size, weight), just grayed out and drifting slowly in place, so
+   it blends in rather than looking like a foreign shape. Deliberately NOT jittery or
+   randomized letter-like noise (a la Minecraft's enchantment text): the jibberish letters are
+   generated once in app.js and never reshuffle, so only the slow, staggered float animation
+   moves - calm and elusive rather than something fighting for attention. */
+.cell.ghost {
   pointer-events: none;
-  animation: ghost-drift 4.4s ease-in-out infinite;
+  animation: ghost-drift 4.6s ease-in-out infinite;
   animation-delay: var(--delay, 0s);
 }
+.cell.ghost .w {
+  color: var(--muted);
+  opacity: 0.55;
+}
 @keyframes ghost-drift {
-  0%, 100% { transform: translateY(0); opacity: calc(var(--base, 0.5) * 0.5); }
-  50% { transform: translateY(-5px); opacity: var(--base, 0.5); }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
 }
 
 /* The first word(s) of the next stretch fade in after the queue's brief blank pause at a

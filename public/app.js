@@ -140,10 +140,22 @@
   // Decorative placeholders filling the rest of the stream past the LOOKAHEAD real words, so
   // the strip still reads as "a couple of lines of upcoming text" the way the old fixed-batch
   // view did - they are not real words (we only ever generate LOOKAHEAD ahead, on purpose, so
-  // the complexity band can keep adapting live), just a soft, slow-drifting suggestion that
-  // more is coming. Hidden near a break, where the real taper count is the honest thing to show.
-  const GHOST_COUNT = 12;
-  const GHOST_WIDTHS = [46, 70, 56, 82, 60, 50, 74, 64];
+  // the complexity band can keep adapting live), just grayed-out jibberish word shapes, in the
+  // exact same typography as a real word, that drift slowly in place. Hidden near a break,
+  // where the real, shrinking taper count is the honest thing to show instead. Generated once,
+  // not on every render, so the letters never flicker/reshuffle - that erratic look is exactly
+  // what this is meant to avoid.
+  const GHOST_COUNT = 14;
+  const JIBBERISH_LETTERS = 'abcdefghijklmnopqrstuvwxyz';
+  function randomJibberish() {
+    const len = 3 + Math.floor(Math.random() * 6);
+    let word = '';
+    for (let i = 0; i < len; i++) {
+      word += JIBBERISH_LETTERS[Math.floor(Math.random() * JIBBERISH_LETTERS.length)];
+    }
+    return word;
+  }
+  const GHOST_WORDS = Array.from({ length: GHOST_COUNT }, randomJibberish);
 
   const currentWord = () => state.queue[0];
   // The stroke sequence to show: the first one that is still possible
@@ -468,20 +480,21 @@
       stream.appendChild(cell);
     }
     // Ghost placeholders: not real generated words (we deliberately only ever generate
-    // LOOKAHEAD ahead), just a slow, drifting suggestion that more is coming, so the strip
-    // doesn't visually dead-end right after the real words. Skipped entirely near a break,
-    // where the honest thing to show is the real, shrinking count - never a placeholder.
+    // LOOKAHEAD ahead), just grayed-out jibberish in the same cell/word styling as a real
+    // word, drifting slowly in place, so the strip doesn't visually dead-end right after the
+    // real words. Skipped entirely near a break, where the honest thing to show is the real,
+    // shrinking count - never a placeholder.
     if (!nearBreak()) {
       for (let g = 0; g < GHOST_COUNT; g++) {
-        const ghost = document.createElement('div');
-        ghost.className = 'ghost';
-        ghost.setAttribute('aria-hidden', 'true');
-        ghost.style.width = `${GHOST_WIDTHS[g % GHOST_WIDTHS.length]}px`;
-        ghost.style.setProperty('--delay', `${-(g * 0.41).toFixed(2)}s`);
-        // Further-out placeholders fade a little more, so the strip trails off into mist
-        // rather than ending in a hard row of identically-bright blobs.
-        ghost.style.setProperty('--base', String(Math.max(0.2, 0.55 - g * 0.03)));
-        stream.appendChild(ghost);
+        const cell = document.createElement('div');
+        cell.className = 'cell ghost';
+        cell.setAttribute('aria-hidden', 'true');
+        cell.style.setProperty('--delay', `${-(g * 0.41).toFixed(2)}s`);
+        const wordEl = document.createElement('span');
+        wordEl.className = 'w';
+        wordEl.textContent = GHOST_WORDS[g % GHOST_WORDS.length];
+        cell.appendChild(wordEl);
+        stream.appendChild(cell);
       }
     }
     if (current) {
