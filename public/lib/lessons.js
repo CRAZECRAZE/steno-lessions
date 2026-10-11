@@ -414,6 +414,30 @@
     return 1 + WEAKNESS_GAIN * maxWeak * maxWeak;
   }
 
+  // Precomputed bit -> keyWeakness for every unlocked key, built once per pickWords call
+  // rather than once per candidate word. keyWeakness is the same for a given key across every
+  // word in the call, so recomputing it (and the keyAccuracy scan behind it) per word turns a
+  // single pass over the dictionary into a pass that's quadratic in the unlocked key count -
+  // noticeable once a lesson has unlocked more than a handful of keys.
+  function weaknessByBit(progress, slotIndex) {
+    const byBit = new Map();
+    for (const name of unlockedNames(progress)) {
+      byBit.set(1 << slotIndex.get(name), keyWeakness(progress, name));
+    }
+    return byBit;
+  }
+
+  // Same result as `weaknessBoost`, from the precomputed map above, and only walking the bits
+  // actually set in this word's chord rather than every unlocked key.
+  function weaknessBoostFromMap(byBit, bits) {
+    let maxWeak = 0;
+    for (let rest = bits; rest; rest &= rest - 1) {
+      const weak = byBit.get(rest & -rest);
+      if (weak !== undefined && weak > maxWeak) maxWeak = weak;
+    }
+    return 1 + WEAKNESS_GAIN * maxWeak * maxWeak;
+  }
+
   // Picks words for the stream. Only words with at least one stroke sequence that uses
   // unlocked keys are eligible. Words touching weaker unlocked keys come up more often (see
   // `weaknessBoost`), and words in `avoid` (recently typed) are skipped where possible.
@@ -442,12 +466,13 @@
 
     const pool = eligible.filter(({ word }) => !avoid.has(word.text));
     const source = pool.length >= count ? pool : eligible;
+    const byBit = weaknessByBit(progress, slotIndex);
     const weighted = source.map(({ word, usable }) => {
       // Plover's dictionary has no word frequencies, so combine a real frequency list with
       // the length/stroke heuristics: medium length, one stroke, and actually common words win.
       let weight = lengthWeight(word.text.length) * strokeWeight(usable[0].length) * WordFreq.freqWeight(word.text);
       const bits = usable[0].reduce((combined, strokeBits) => combined | strokeBits, 0);
-      weight *= weaknessBoost(progress, bits, slotIndex);
+      weight *= weaknessBoostFromMap(byBit, bits);
       weight *= bonusFn(usable);
       return { word, weight };
     });
@@ -494,20 +519,16 @@
     return names.reduce((mask, name) => mask | (1 << slotIndex.get(name)), 0);
   }
 
-  // One word, chosen for the live complexity band: 'etude' (isolated, minimal-load reps on
-  // the focus key), 'study' (today's normal picking, unchanged), or 'concerto' (full-length
-  // words that deliberately recombine several recently-unlocked keys). The band is read from
-  // `complexityScore` fresh every call, so it can move word to word, not just at a boundary -
-  // unless `options.forceBand` overrides it (used for scheduled diagnostic probes) or a
-  // `kinematicGap` deficit on the focus key forces 'etude' regardless of its confidence score,
-  // because a key whose isolated reps are not substantially faster than its blended reps is
-  // not actually being held back by word complexity.
-  function nextWord(words, progress, slotIndex, options = {}) {
+  // The live complexity band ('etude'/'study'/'concerto') plus the pickWords options that
+  // enforce it, shared by `nextWord` and `nextWords` so a batch call picks the band once
+  // instead of re-deriving the identical answer (it's a pure function of `progress`, which
+  // neither picker mutates) on every word in the batch.
+  function bandPickOptions(progress, slotIndex, options) {
     const focus = focusKey(progress);
     const gap = focus ? kinematicGap(progress, focus) : null;
     const deficit = gap !== null && gap <= HEALTHY_PROBE_GAP;
     const band = options.forceBand || (deficit ? 'etude' : complexityBand(complexityScore(progress)));
-    const pickOptions = { ...options, count: 1 };
+    const pickOptions = { ...options };
     delete pickOptions.forceBand;
     delete pickOptions.isProbe;
 
@@ -525,13 +546,43 @@
         return 1 + count;
       };
     }
+    return { band, focus, pickOptions };
+  }
 
-    let picked = pickWords(words, progress, slotIndex, pickOptions)[0];
+  // One word, chosen for the live complexity band: 'etude' (isolated, minimal-load reps on
+  // the focus key), 'study' (today's normal picking, unchanged), or 'concerto' (full-length
+  // words that deliberately recombine several recently-unlocked keys). The band is read from
+  // `complexityScore` fresh every call, so it can move word to word, not just at a boundary -
+  // unless `options.forceBand` overrides it (used for scheduled diagnostic probes) or a
+  // `kinematicGap` deficit on the focus key forces 'etude' regardless of its confidence score,
+  // because a key whose isolated reps are not substantially faster than its blended reps is
+  // not actually being held back by word complexity.
+  function nextWord(words, progress, slotIndex, options = {}) {
+    const { band, focus, pickOptions } = bandPickOptions(progress, slotIndex, options);
+    let picked = pickWords(words, progress, slotIndex, { ...pickOptions, count: 1 })[0];
     // An etude restriction (or any band option) can legitimately leave nothing eligible early
     // on, when few keys are mastered yet - fall back to a plain pick rather than return nothing.
     if (!picked) picked = pickWords(words, progress, slotIndex, { ...options, count: 1 })[0];
     if (!picked) return null;
     return { ...picked, band, isProbe: Boolean(options.isProbe), focusKeyAtPick: focus };
+  }
+
+  // `count` words for the live band in one pass, for a caller that needs several at once (the
+  // decorative ghost strip) and would otherwise call `nextWord` in a loop - which looks
+  // harmless but reruns the exact same whole-dictionary scan, with the exact same band and
+  // `avoid` set, once per word instead of once total, since nothing any of those calls read
+  // (the band, the mask, `progress` itself) changes between them.
+  function nextWords(words, progress, slotIndex, count, options = {}) {
+    const { band, focus, pickOptions } = bandPickOptions(progress, slotIndex, options);
+    const picked = pickWords(words, progress, slotIndex, { ...pickOptions, count });
+    // Same fallback as `nextWord`, applied to whatever's still missing after the band-
+    // restricted pass, rather than one plain pick per missing word.
+    if (picked.length < count) {
+      const avoid = [...(options.avoid || []), ...picked.map((word) => word.text)];
+      const rest = pickWords(words, progress, slotIndex, { ...options, avoid, count: count - picked.length });
+      picked.push(...rest);
+    }
+    return picked.map((word) => ({ ...word, band, isProbe: Boolean(options.isProbe), focusKeyAtPick: focus }));
   }
 
   // Whether loading `incoming` in place of `current` would erase real progress. totalTyped
@@ -583,6 +634,7 @@
     displayVariants,
     pickWords,
     nextWord,
+    nextWords,
     startLesson,
     isRewind,
   };

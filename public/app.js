@@ -351,13 +351,8 @@
   // shifts one off the front to match the real queue shrinking. That split is what keeps the
   // content stable mid-stretch while still refreshing it, cleanly, lesson to lesson.
   function refillGhostWords() {
-    state.ghostWords = [];
     const avoid = state.recent.concat(state.queue.map((word) => word.text));
-    for (let i = 0; i < GHOST_COUNT; i++) {
-      const word = L.nextWord(state.data.words, state.progress, state.slotIndex, { avoid });
-      if (!word) break;
-      state.ghostWords.push(word);
-    }
+    state.ghostWords = L.nextWords(state.data.words, state.progress, state.slotIndex, GHOST_COUNT, { avoid });
   }
 
   // Only stroke sequences that use unlocked keys are shown, so a word never asks for a locked key
