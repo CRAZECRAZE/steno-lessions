@@ -513,13 +513,15 @@ body.paused #practice .feedback {
 
 .key .main { font-size: 15px; line-height: 1; }
 
-/* Steno keys: the sound is big on top, and the key you press is named underneath */
+/* Steno keys: the sound is big on top, and the key you press is named underneath. Capitalized
+   to match the word stream's .snd row - the underlying data is lowercase either way. */
 .key.steno .main.sound {
   position: absolute;
   top: 6px;
   left: 0;
   right: 0;
   text-align: center;
+  text-transform: uppercase;
   font-family: var(--key-font);
   font-size: 19px;
   font-weight: 700;
