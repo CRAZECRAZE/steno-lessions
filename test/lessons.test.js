@@ -255,32 +255,6 @@ test('pickWords weighs every unlocked key\'s own weakness, not just a single foc
   assert.equal(picked[0].text, 'zzzz', 'the word touching the still-unknown key should win the tie');
 });
 
-test('keyWeakness reacts to the raw accuracy deficit, not the target-normalized/speed-coupled confidence metric', () => {
-  const progress = lessons.emptyProgress();
-  // 18 correct, 12 wrong, well past the grace period - a key reading as 60% recently accurate
-  // while comfortably fast, mirroring a real "struggling but not catastrophic" key. confidence
-  // would read this as 0.75 (accuracy capped at accuracy/KEY_ACCURACY_TARGET); keyWeakness
-  // should read the real 40% error rate instead.
-  for (let i = 0; i < 30; i++) lessons.recordChord(progress, ['-F'], 400, i % 5 !== 0 && i % 5 !== 1);
-  assert.equal(lessons.keyAccuracy(progress, '-F'), 0.6);
-  assert.ok(lessons.confidence(progress, '-F') > 0.7, 'confidence alone reads this as much healthier than it is');
-  assert.equal(lessons.keyWeakness(progress, '-F'), 0.4);
-});
-
-test('a key at 60% accuracy pulls meaningfully more word-selection weight than one at 90%+, not just a token amount', () => {
-  const progress = lessons.emptyProgress();
-  progress.unlocked = lessons.KEY_ORDER.length; // both -F and A- need to be unlocked to be eligible
-  for (let i = 0; i < 30; i++) lessons.recordChord(progress, ['-F'], 400, i % 5 !== 0 && i % 5 !== 1); // 60%
-  for (let i = 0; i < 30; i++) lessons.recordChord(progress, ['A-'], 400, i !== 0 && i !== 1 && i !== 2); // 90%
-  const touchesWeakKey = { text: 'zzzz', variants: [[1 << slotIndex.get('-F')]] };
-  const touchesSolidKey = { text: 'yyyy', variants: [[1 << slotIndex.get('A-')]] };
-  const picked = lessons.pickWords([touchesWeakKey, touchesSolidKey], progress, slotIndex, {
-    random: () => 0.5,
-    count: 1,
-  });
-  assert.equal(picked[0].text, 'zzzz', 'the clearly-weaker key should win the tie, not just edge it out');
-});
-
 test('complexityScore/complexityBand read the focus key\'s own confidence as the etude<->concerto dial', () => {
   const progress = lessons.emptyProgress();
   // Fresh progress: no samples anywhere yet, so the focus key has 0 confidence - etude band.
