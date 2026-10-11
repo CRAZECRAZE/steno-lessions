@@ -274,11 +274,12 @@ body.paused #practice .feedback {
    and keys run as three parallel lines. The layout is the same with Key hints on or off. */
 .stream {
   position: relative;
-  /* Tall enough for the real words plus a second row of ghost placeholders (see .ghost
-     below). No container-level fade mask here on purpose - on a narrow viewport the real
-     words themselves can wrap onto a second line, and a mask positioned by percentage would
-     have no way to tell that line apart from the ghost row below it and would clip real text. */
-  height: 160px;
+  /* Tall enough for the real words plus a second row of ghost placeholders (see .cell.ghost
+     below), which now carry the full word/sound/keys topology, not just one line. No
+     container-level fade mask here on purpose - on a narrow viewport the real words
+     themselves can wrap onto a second line, and a mask positioned by percentage would have no
+     way to tell that line apart from the ghost row below it and would clip real text. */
+  height: 230px;
   overflow: hidden;
   display: flex;
   flex-wrap: wrap;
@@ -288,20 +289,23 @@ body.paused #practice .feedback {
   padding-top: 2px;
 }
 
-/* Decorative placeholders past the real, generated words - the exact same cell/word styling
-   as a real word (same font, size, weight), just grayed out and drifting slowly in place, so
-   it blends in rather than looking like a foreign shape. Deliberately NOT jittery or
-   randomized letter-like noise (a la Minecraft's enchantment text): the jibberish letters are
-   generated once in app.js and never reshuffle, so only the slow, staggered float animation
-   moves - calm and elusive rather than something fighting for attention. */
+/* Decorative placeholders past the real, generated words - the exact same cell topology as a
+   real word (word line, sound line, keys line, same font/size/weight), just jibberish letters
+   super dimmed, drifting slowly in place, so it blends in rather than looking like a foreign
+   shape. Deliberately NOT jittery or randomized letter-like noise (a la Minecraft's
+   enchantment text): the jibberish letters are generated once in app.js and never reshuffle,
+   so only the slow, staggered float animation moves - calm and elusive rather than something
+   fighting for attention. */
 .cell.ghost {
   pointer-events: none;
   animation: ghost-drift 4.6s ease-in-out infinite;
   animation-delay: var(--delay, 0s);
 }
-.cell.ghost .w {
+.cell.ghost .w,
+.cell.ghost .snd,
+.cell.ghost .kc {
   color: var(--muted);
-  opacity: 0.55;
+  opacity: 0.22;
 }
 @keyframes ghost-drift {
   0%, 100% { transform: translateY(0); }

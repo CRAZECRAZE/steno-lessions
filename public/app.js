@@ -140,22 +140,26 @@
   // Decorative placeholders filling the rest of the stream past the LOOKAHEAD real words, so
   // the strip still reads as "a couple of lines of upcoming text" the way the old fixed-batch
   // view did - they are not real words (we only ever generate LOOKAHEAD ahead, on purpose, so
-  // the complexity band can keep adapting live), just grayed-out jibberish word shapes, in the
-  // exact same typography as a real word, that drift slowly in place. Hidden near a break,
-  // where the real, shrinking taper count is the honest thing to show instead. Generated once,
-  // not on every render, so the letters never flicker/reshuffle - that erratic look is exactly
-  // what this is meant to avoid.
+  // the complexity band can keep adapting live). Each one has the exact same three-line shape
+  // as a real word (word / sound / keys), just jibberish letters, super dimmed. Hidden near a
+  // break, where the real, shrinking taper count is the honest thing to show instead.
+  // Generated once, not on every render, so the letters never flicker/reshuffle - that erratic
+  // look is exactly what this is meant to avoid.
   const GHOST_COUNT = 14;
   const JIBBERISH_LETTERS = 'abcdefghijklmnopqrstuvwxyz';
-  function randomJibberish() {
-    const len = 3 + Math.floor(Math.random() * 6);
-    let word = '';
+  function randomLetters(min, max) {
+    const len = min + Math.floor(Math.random() * (max - min + 1));
+    let out = '';
     for (let i = 0; i < len; i++) {
-      word += JIBBERISH_LETTERS[Math.floor(Math.random() * JIBBERISH_LETTERS.length)];
+      out += JIBBERISH_LETTERS[Math.floor(Math.random() * JIBBERISH_LETTERS.length)];
     }
-    return word;
+    return out;
   }
-  const GHOST_WORDS = Array.from({ length: GHOST_COUNT }, randomJibberish);
+  const GHOST_CELLS = Array.from({ length: GHOST_COUNT }, () => ({
+    word: randomLetters(3, 8),
+    sound: randomLetters(2, 5),
+    keys: `${randomLetters(1, 2)} ${randomLetters(1, 2)}`,
+  }));
 
   const currentWord = () => state.queue[0];
   // The stroke sequence to show: the first one that is still possible
@@ -480,20 +484,31 @@
       stream.appendChild(cell);
     }
     // Ghost placeholders: not real generated words (we deliberately only ever generate
-    // LOOKAHEAD ahead), just grayed-out jibberish in the same cell/word styling as a real
-    // word, drifting slowly in place, so the strip doesn't visually dead-end right after the
-    // real words. Skipped entirely near a break, where the honest thing to show is the real,
-    // shrinking count - never a placeholder.
+    // LOOKAHEAD ahead), just the same three-line topology as a real word (word, sound, keys),
+    // filled with jibberish and super dimmed, drifting slowly in place, so the strip doesn't
+    // visually dead-end right after the real words. Skipped entirely near a break, where the
+    // honest thing to show is the real, shrinking count - never a placeholder.
     if (!nearBreak()) {
       for (let g = 0; g < GHOST_COUNT; g++) {
+        const ghostData = GHOST_CELLS[g % GHOST_CELLS.length];
         const cell = document.createElement('div');
         cell.className = 'cell ghost';
         cell.setAttribute('aria-hidden', 'true');
         cell.style.setProperty('--delay', `${-(g * 0.41).toFixed(2)}s`);
         const wordEl = document.createElement('span');
         wordEl.className = 'w';
-        wordEl.textContent = GHOST_WORDS[g % GHOST_WORDS.length];
+        wordEl.textContent = ghostData.word;
         cell.appendChild(wordEl);
+        const soundEl = document.createElement('span');
+        soundEl.className = 'snd';
+        soundEl.style.gridColumn = '1';
+        soundEl.textContent = ghostData.sound;
+        cell.appendChild(soundEl);
+        const keysEl = document.createElement('span');
+        keysEl.className = 'kc';
+        keysEl.style.gridColumn = '1';
+        keysEl.textContent = ghostData.keys;
+        cell.appendChild(keysEl);
         stream.appendChild(cell);
       }
     }
