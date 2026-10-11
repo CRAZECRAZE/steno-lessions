@@ -106,7 +106,15 @@
   }
 
   function emptyProgress() {
-    return { unlocked: START_KEYS, keys: {}, words: [], lessonHistory: [], totalTyped: 0, scaffolds: defaultScaffolds() };
+    return {
+      unlocked: START_KEYS,
+      keys: {},
+      words: [],
+      lessonHistory: [],
+      totalTyped: 0,
+      scaffolds: defaultScaffolds(),
+      scaffoldMarks: {},
+    };
   }
 
   // Keeps only the fields the engine understands, so an old or damaged save still loads.
@@ -146,6 +154,19 @@
     if (saved.scaffolds && typeof saved.scaffolds === 'object') {
       for (const stage of Object.keys(progress.scaffolds)) {
         if (typeof saved.scaffolds[stage] === 'boolean') progress.scaffolds[stage] = saved.scaffolds[stage];
+      }
+    }
+    if (saved.scaffoldMarks && typeof saved.scaffoldMarks === 'object') {
+      for (const stage of Object.keys(saved.scaffoldMarks)) {
+        const mark = saved.scaffoldMarks[stage];
+        if (!mark || typeof mark !== 'object') continue;
+        const cleaned = {};
+        for (const name of KEY_ORDER) {
+          const entry = mark[name];
+          if (!entry || typeof entry !== 'object') continue;
+          cleaned[name] = { samples: Math.max(0, Number(entry.samples) || 0), misses: Math.max(0, Number(entry.misses) || 0) };
+        }
+        progress.scaffoldMarks[stage] = cleaned;
       }
     }
     if (Number.isFinite(saved.totalTyped)) {
@@ -319,6 +340,54 @@
   function scaffoldVisible(progress, stage, override) {
     if (override) return true;
     return scaffoldTier(progress) < SCAFFOLD_STAGE_TIER[stage];
+  }
+
+  // Snapshots every unlocked key's current samples/misses as the redo baseline for `stage`.
+  // Called the moment a scaffold checkbox goes from checked to unchecked, so
+  // `scaffoldRedoMastered` below has a clean "zero" to measure fresh practice from - without
+  // this, unchecking a box after already mastering everything would satisfy a scaffold-off
+  // badge instantly, with no actual redo. A key with no entry yet (unlocked after this mark is
+  // taken) is treated as a 0 baseline wherever it's read, so it needs no entry of its own.
+  function recordScaffoldOff(progress, stage) {
+    progress.scaffoldMarks = progress.scaffoldMarks || {};
+    const marks = {};
+    for (const name of unlockedNames(progress)) {
+      const stat = progress.keys[name];
+      marks[name] = { samples: stat ? stat.samples : 0, misses: stat ? stat.misses : 0 };
+    }
+    progress.scaffoldMarks[stage] = marks;
+  }
+
+  // Only for a save from before scaffold-redo badges existed: if `stage` is already off with
+  // no mark on record, treat right now as the baseline rather than letting old mastery earned
+  // before this feature shipped count as an instant, unearned redo. A no-op once a mark exists.
+  function ensureScaffoldMark(progress, stage) {
+    if (progress.scaffoldMarks && progress.scaffoldMarks[stage]) return;
+    recordScaffoldOff(progress, stage);
+  }
+
+  // Whether every unlocked key has been mastered (tier 2) using only practice recorded since
+  // `stage` last went off - not just mastered right now while it happens to be off. A key needs
+  // `SAMPLES_TO_LEARN` fresh correct reps (confidence's own "enough practice" bar) and
+  // `KEY_ACCURACY_WINDOW` fresh attempts (enough to have fully displaced its pre-mark accuracy
+  // window) since the mark, on top of currently reading as tier 2.
+  function scaffoldRedoMastered(progress, stage) {
+    const names = unlockedNames(progress);
+    // No mark at all (as opposed to one with a missing entry for some key - see below) means
+    // this stage was never actually recorded as going off, so there is no redo to measure -
+    // without this, an un-marked stage would read as "baseline zero" and pass instantly off
+    // of mastery earned long before it ever went off.
+    if (names.length === 0 || !progress.scaffoldMarks || !progress.scaffoldMarks[stage]) return false;
+    const marks = progress.scaffoldMarks[stage];
+    return names.every((name) => {
+      if (masteryTier(progress, name) < 2) return false;
+      const stat = progress.keys[name];
+      if (!stat) return false;
+      const mark = marks[name] || { samples: 0, misses: 0 };
+      const freshSamples = stat.samples - mark.samples;
+      const freshAttempts = stat.samples + stat.misses - (mark.samples + mark.misses);
+      return freshSamples >= SAMPLES_TO_LEARN && freshAttempts >= KEY_ACCURACY_WINDOW;
+    });
   }
 
   // The etude<->concerto dial, 0-100: how ready the focus key is, reusing the same signal
@@ -623,6 +692,9 @@
     masteryTier,
     scaffoldTier,
     scaffoldVisible,
+    recordScaffoldOff,
+    ensureScaffoldMark,
+    scaffoldRedoMastered,
     complexityScore,
     complexityBand,
     kinematicGap,

@@ -414,6 +414,74 @@ test('normalize round-trips scaffold preferences, ignoring garbage values', () =
   assert.deepEqual(normalized.scaffolds, { labels: false, target: true, keyboard: true });
 });
 
+test('scaffoldRedoMastered needs fresh practice since the mark, not just current mastery', () => {
+  const progress = lessons.emptyProgress();
+  for (const name of lessons.unlockedNames(progress)) {
+    for (let i = 0; i < 30; i++) lessons.recordChord(progress, [name], 400, true);
+  }
+  assert.equal(lessons.scaffoldTier(progress), 2, 'already mastered before the scaffold ever goes off');
+  lessons.recordScaffoldOff(progress, 'labels');
+  assert.equal(
+    lessons.scaffoldRedoMastered(progress, 'labels'),
+    false,
+    'mastered before the mark, not since it - must not count as an instant redo',
+  );
+  // Fresh reps on every key, enough to clear both the sample and attempt-window bars.
+  for (const name of lessons.unlockedNames(progress)) {
+    for (let i = 0; i < 30; i++) lessons.recordChord(progress, [name], 400, true);
+  }
+  assert.equal(lessons.scaffoldRedoMastered(progress, 'labels'), true);
+  // An unrelated stage's mark is untouched - redoing it for 'labels' doesn't grant 'target'.
+  assert.equal(lessons.scaffoldRedoMastered(progress, 'target'), false);
+});
+
+test('scaffoldRedoMastered stays false if a key slips back under tier 2, even with enough fresh reps', () => {
+  const progress = lessons.emptyProgress();
+  for (const name of lessons.unlockedNames(progress)) {
+    for (let i = 0; i < 30; i++) lessons.recordChord(progress, [name], 400, true);
+  }
+  lessons.recordScaffoldOff(progress, 'keyboard');
+  for (const name of lessons.unlockedNames(progress)) {
+    for (let i = 0; i < 30; i++) lessons.recordChord(progress, [name], 400, true);
+  }
+  // One key goes bad after the fresh redo - a slow, missed rep on S- alone.
+  for (let i = 0; i < 30; i++) lessons.recordChord(progress, ['S-'], 3000, false);
+  assert.equal(lessons.masteryTier(progress, 'S-'), 0);
+  assert.equal(lessons.scaffoldRedoMastered(progress, 'keyboard'), false);
+});
+
+test('recordScaffoldOff resets the baseline on every call; ensureScaffoldMark only fills a missing one', () => {
+  const progress = lessons.emptyProgress();
+  for (const name of lessons.unlockedNames(progress)) {
+    for (let i = 0; i < 30; i++) lessons.recordChord(progress, [name], 400, true);
+  }
+  lessons.recordScaffoldOff(progress, 'target');
+  for (const name of lessons.unlockedNames(progress)) {
+    for (let i = 0; i < 30; i++) lessons.recordChord(progress, [name], 400, true);
+  }
+  assert.equal(lessons.scaffoldRedoMastered(progress, 'target'), true, 'first redo period earned it');
+  // ensureScaffoldMark must not disturb an existing mark (it's for migrating old saves only).
+  lessons.ensureScaffoldMark(progress, 'target');
+  assert.equal(lessons.scaffoldRedoMastered(progress, 'target'), true, 'ensureScaffoldMark left the earned mark alone');
+  // A genuine re-toggle (recordScaffoldOff again) must reset it - re-checking the box and
+  // unchecking it again should require redoing the mastery, not grandfather the old one in.
+  lessons.recordScaffoldOff(progress, 'target');
+  assert.equal(lessons.scaffoldRedoMastered(progress, 'target'), false, 'a fresh toggle-off restarts the redo clock');
+});
+
+test('normalize round-trips scaffoldMarks, ignoring garbage values', () => {
+  const normalized = lessons.normalize({
+    scaffoldMarks: {
+      labels: { 'A-': { samples: 5, misses: 2 }, bogus: { samples: 1, misses: 0 } },
+      junkStage: { 'A-': { samples: 1, misses: 0 } },
+      target: 'nonsense',
+    },
+  });
+  assert.deepEqual(normalized.scaffoldMarks.labels, { 'A-': { samples: 5, misses: 2 } });
+  assert.deepEqual(normalized.scaffoldMarks.junkStage, { 'A-': { samples: 1, misses: 0 } });
+  assert.equal(normalized.scaffoldMarks.target, undefined);
+});
+
 test('scaffoldTier is the minimum mastery tier across every unlocked key', () => {
   const progress = lessons.emptyProgress();
   for (const name of lessons.unlockedNames(progress)) {

@@ -86,6 +86,21 @@
     }
   }
 
+  function allScaffoldsOff() {
+    return SCAFFOLD_BOXES.every(([flag]) => !state.progress.scaffolds[flag]);
+  }
+
+  // A save that already has a scaffold off (or all three) with no redo baseline on record -
+  // either from before this feature existed, or freshly imported from someone else's clipboard
+  // export - gets right now as that baseline, rather than letting mastery earned before this
+  // moment count as an instant, unearned scaffold-off badge.
+  function ensureScaffoldMarks() {
+    for (const [flag] of SCAFFOLD_BOXES) {
+      if (!state.progress.scaffolds[flag]) L.ensureScaffoldMark(state.progress, flag);
+    }
+    if (allScaffoldsOff()) L.ensureScaffoldMark(state.progress, 'all');
+  }
+
   // Three scaffolds, each its own checkbox - checked (the default) means "always show,
   // ignore mastery", unchecked means "let scaffoldTier fade it in automatically." Nothing is
   // ever taken away with no way back: fading is only ever something a learner opts into by
@@ -633,9 +648,26 @@
     });
     const unlockedNames = L.unlockedNames(progress);
     const masteredCount = unlockedNames.filter((name) => L.masteryTier(progress, name) >= 2).length;
+    const allMastered = unlockedNames.length > 0 && masteredCount === unlockedNames.length;
+    // The scaffold-off badges below need every key re-mastered using only practice recorded
+    // since that scaffold last went off (L.scaffoldRedoMastered) - not just "mastered right
+    // now, box happens to be unchecked", which a save already at gold could satisfy by
+    // toggling a box with zero further practice.
+    const scaffolds = progress.scaffolds;
+    const redoLabels = !scaffolds.labels && L.scaffoldRedoMastered(progress, 'labels');
+    const redoTarget = !scaffolds.target && L.scaffoldRedoMastered(progress, 'target');
+    const redoKeyboard = !scaffolds.keyboard && L.scaffoldRedoMastered(progress, 'keyboard');
+    // The ultimate badge has its own 'all' mark (set only when all three go off together, see
+    // allScaffoldsOff in init) - it must not fire from three separately-earned redo periods
+    // that never actually overlapped.
+    const redoAll = allScaffoldsOff() && L.scaffoldRedoMastered(progress, 'all');
     const badges = [
       { cls: 'silver', label: 'Half your sounds mastered', earned: masteredCount >= Math.ceil(unlockedNames.length / 2) },
-      { cls: 'gold', label: 'Every sound mastered', earned: unlockedNames.length > 0 && masteredCount === unlockedNames.length },
+      { cls: 'gold', label: 'Every sound mastered', earned: allMastered },
+      { cls: 'platinum', label: 'Every sound re-mastered with stroke labels off', earned: redoLabels },
+      { cls: 'diamond', label: 'Every sound re-mastered with the target highlight off', earned: redoTarget },
+      { cls: 'obsidian', label: 'Every sound re-mastered with the keyboard diagram off', earned: redoKeyboard },
+      { cls: 'ultimate', label: 'Every sound re-mastered with every scaffold off at once', earned: redoAll },
     ];
     for (const badge of badges) {
       const chip = document.createElement('li');
@@ -1070,10 +1102,21 @@
       applyHints();
       refresh();
     });
+    ensureScaffoldMarks();
     applyScaffoldBoxes();
     for (const [flag, id] of SCAFFOLD_BOXES) {
       $(id).addEventListener('change', (event) => {
+        const wasAllOff = allScaffoldsOff();
+        const turnedOff = state.progress.scaffolds[flag] && !event.target.checked;
         state.progress.scaffolds[flag] = event.target.checked;
+        // A fresh baseline every time it's turned off (not just the first time) - having
+        // earned a scaffold-off badge once before doesn't let a later off period skip redoing
+        // the mastery, since confidence never resets just because a box got checked again.
+        if (turnedOff) L.recordScaffoldOff(state.progress, flag);
+        // The ultimate badge needs mastery re-earned with all three off *together*, not three
+        // separately-earned redo periods that never overlapped - so it gets its own mark, only
+        // reset at the moment all three actually become off at once.
+        if (!wasAllOff && allScaffoldsOff()) L.recordScaffoldOff(state.progress, 'all');
         saveProgress();
         refresh();
       });
@@ -1102,6 +1145,7 @@
       state.progress = incoming;
       state.recent = [];
       state.queue = [];
+      ensureScaffoldMarks();
       applyScaffoldBoxes();
       refillQueue();
       refillGhostWords();
