@@ -411,26 +411,20 @@ body.paused #practice .feedback {
 
 /* Wrong keys for the stroke being typed, on their own row below it instead of spliced into
    the sounds themselves - so a mistake never changes that row's width and shifts every cell
-   after it in the stream. Always present (see renderStream), so this row's height is reserved
-   up front and never changes between an error and no error - which is also why the keyhints
-   row (.kc) below it is its own, later grid row rather than sharing one with this. With Key
-   hints on, min-height holds that reserved space even when empty; with hints off there is
-   nothing below this row to protect from shifting (.kc is gone), so no space is reserved and
-   the row just collapses to nothing until an error actually appears. */
+   after it in the stream. No reserved height: empty when there's no mistake, and just appears
+   when there is, same as the keyhints row (.kc) below it shifting down to make room. */
 .errors {
   grid-row: 4;
   grid-column: 1 / -1;
   display: flex;
   justify-content: center;
   gap: 3px;
-  min-height: 16px;
   font-family: var(--key-font);
   font-size: 16px;
   font-weight: 700;
   color: var(--bad);
   white-space: nowrap;
 }
-.hints-off .errors { min-height: 0; }
 /* Left-hand keys, vowels and right-hand keys each have their own flat colour in the stream.
    Keys fingered together as a pair share that one colour too - the underline below is what
    tells them apart from their neighbours, not a shade difference. */

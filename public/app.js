@@ -505,9 +505,8 @@
         keys.textContent = keysFor(bits).join(' ');
         cell.append(sound, keys);
       });
-      // Always appended, even with nothing in it, so this row's reserved height (see style.css)
-      // never changes between a cell with an error and one without, and the keyhints row below
-      // it never jumps.
+      // Its own grid row below the strokes, between them and the keyhints row - empty and
+      // taking no space until there's an actual mistake to show.
       const errors = document.createElement('span');
       errors.className = 'errors';
       for (const { text, released } of errorEntries) {
