@@ -399,7 +399,7 @@ body.paused #practice .feedback {
   text-transform: uppercase;
 }
 .kc {
-  grid-row: 4;
+  grid-row: 5;
   padding: 0 6px;
   font: 600 18px ui-monospace, Menlo, monospace;
   color: var(--muted);
@@ -408,6 +408,29 @@ body.paused #practice .feedback {
 /* Each stroke of a word is a group. A divider line and extra space between groups show where
    one chord ends and the next begins */
 .snd + .snd, .kc + .kc { border-left: 2px solid var(--divider); }
+
+/* Wrong keys for the stroke being typed, on their own row below it instead of spliced into
+   the sounds themselves - so a mistake never changes that row's width and shifts every cell
+   after it in the stream. Always present (see renderStream), so this row's height is reserved
+   up front and never changes between an error and no error - which is also why the keyhints
+   row (.kc) below it is its own, later grid row rather than sharing one with this. With Key
+   hints on, min-height holds that reserved space even when empty; with hints off there is
+   nothing below this row to protect from shifting (.kc is gone), so no space is reserved and
+   the row just collapses to nothing until an error actually appears. */
+.errors {
+  grid-row: 4;
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+  min-height: 16px;
+  font-family: var(--key-font);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--bad);
+  white-space: nowrap;
+}
+.hints-off .errors { min-height: 0; }
 /* Left-hand keys, vowels and right-hand keys each have their own flat colour in the stream.
    Keys fingered together as a pair share that one colour too - the underline below is what
    tells them apart from their neighbours, not a shade difference. */
@@ -423,11 +446,8 @@ body.paused #practice .feedback {
 .ch.pair-b { margin-left: -1px; }
 /* Sounds keep their group colour while typed. A key held right turns its sound green. */
 .snd.current .ch.held { color: var(--good); }
-/* Wrong keys, inserted right into the sound sequence instead of floating off to the side */
-.ch.wrong {
-  color: var(--bad);
-  margin-left: 2px;
-}
+/* Wrong keys, on their own row (.errors) below the stroke they belong to */
+.ch.wrong { color: var(--bad); }
 /* A key let go mid-stroke, before the whole chord is released: stays green/red but dims,
    instead of vanishing, so the chord built up so far is still readable at a glance. */
 .ch.released { opacity: 0.45; }
@@ -467,6 +487,7 @@ body.paused #practice .feedback {
    stream are removed outright, not dimmed - on by default, and the "Stroke labels" checkbox
    always wins by never applying the class in the first place (see app.js). */
 .scaffold-labels-off .cell .snd,
+.scaffold-labels-off .cell .errors,
 .scaffold-labels-off .cell .kc { display: none; }
 
 /* A scheduled diagnostic probe word (lessons.js's kinematicGap): tagged subtly so an

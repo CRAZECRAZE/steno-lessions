@@ -454,6 +454,11 @@
         }
       }
       cell.appendChild(preview);
+      // Wrong keys used to be inserted into the sound sequence; they now go on their own row
+      // below it instead, so a mistake never widens/narrows the stroke row it happened on and
+      // shifts every cell after it. Collected here, across whichever column is current (there
+      // is at most one), and rendered as its own grid row once the stroke loop is done.
+      let errorEntries = [];
       strokes.forEach((bits, column) => {
         const status = !isCurrent ? '' : column < state.strokeIdx ? 'done' : column === state.strokeIdx ? 'current' : '';
         const sound = document.createElement('span');
@@ -476,36 +481,23 @@
           const group = S.keyGroup(name);
           const pair = S.keyPair(name, bits);
           ch.className = `ch${group ? ` ${group}` : ''}${wasPressed ? ' held' : ''}${released ? ' released' : ''}${pair ? ` pair-${pair}` : ''}`;
-          ch.dataset.slot = String(state.slotIndex.get(name));
           ch.textContent = state.slotByName.get(name)?.sound || name;
           sound.appendChild(ch);
         }
         if (status === 'current') {
-          // Wrong keys are inserted into the sound sequence at the slot position they'd
-          // naturally fall in (left to right, same order as the correct sounds), instead of
-          // being appended after it. The instant the whole chord is let go, finishChord zeroes
-          // state.chordBits, so this - like the green/red key colours above - clears completely
-          // and does not linger into the next attempt or the gap before it.
+          // The instant the whole chord is let go, finishChord zeroes state.chordBits, so this
+          // - like the green/red key colours above - clears completely and does not linger into
+          // the next attempt or the gap before it.
           const soundOf = (name) => state.slotByName.get(name)?.sound || name;
           const liveWrongNames = new Set(S.namesInBits(live & ~bits));
           const wrongNames = S.namesInBits(madeThisStroke & ~bits);
-          const insertions = wrongNames.map((name) => ({
-            at: state.slotIndex.get(name),
-            text: soundOf(name),
-            released: !liveWrongNames.has(name),
-          }));
-          for (const { at, text, released } of insertions) {
-            const ch = document.createElement('span');
-            ch.className = `ch wrong${released ? ' released' : ''}`;
-            ch.textContent = text;
-            // Find the correct-sound span already in this slot's position, if any, and insert
-            // right after it, so wrong keys land among the sounds in the same left-to-right
-            // order instead of all trailing at the end.
-            const before = [...sound.children].find(
-              (el) => el.dataset.slot !== undefined && Number(el.dataset.slot) > at,
-            );
-            sound.insertBefore(ch, before || null);
-          }
+          errorEntries = wrongNames
+            .map((name) => ({
+              at: state.slotIndex.get(name),
+              text: soundOf(name),
+              released: !liveWrongNames.has(name),
+            }))
+            .sort((a, b) => a.at - b.at);
         }
         const keys = document.createElement('span');
         keys.className = `kc ${status}`;
@@ -513,6 +505,18 @@
         keys.textContent = keysFor(bits).join(' ');
         cell.append(sound, keys);
       });
+      // Always appended, even with nothing in it, so this row's reserved height (see style.css)
+      // never changes between a cell with an error and one without, and the keyhints row below
+      // it never jumps.
+      const errors = document.createElement('span');
+      errors.className = 'errors';
+      for (const { text, released } of errorEntries) {
+        const ch = document.createElement('span');
+        ch.className = `ch wrong${released ? ' released' : ''}`;
+        ch.textContent = text;
+        errors.appendChild(ch);
+      }
+      cell.appendChild(errors);
       if (isCurrent) current = cell;
       stream.appendChild(cell);
     }
