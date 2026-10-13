@@ -377,7 +377,9 @@
     state.strokeIdx = 0;
     state.wordMisses = 0;
     state.wordMs = 0;
-    state.lastChordEnd = null;
+    // The clock starts when the word appears, so finding and pressing the first chord counts
+    // (otherwise a one-stroke word is timed only by how long the keys were held)
+    state.lastChordEnd = performance.now();
     state.failures = [];
     state.previewBits = 0;
     state.drill = 0;
@@ -826,11 +828,12 @@
     state.chordBits = 0;
     const now = performance.now();
     const ms = now - state.chordStart;
-    // Word time is active typing only: the hold, plus the pause before it if the pause was
-    // short. A longer pause, or time with the page unfocused, is not counted.
+    // Word time is the hold plus the wait before it (from the word appearing or the last
+    // chord ending). A wait longer than IDLE_MS is capped, and time with the page unfocused
+    // is not counted at all.
     if (state.lastChordEnd !== null) {
       const pause = state.chordStart - state.lastChordEnd;
-      if (pause <= IDLE_MS) state.wordMs += pause;
+      state.wordMs += Math.min(Math.max(pause, 0), IDLE_MS);
     }
     state.wordMs += ms;
     state.lastChordEnd = now;
