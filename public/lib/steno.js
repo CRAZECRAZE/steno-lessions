@@ -145,10 +145,12 @@
   }
 
   // Which part of the steno layout a key is in, so the page can colour the left-hand keys,
-  // the vowels and star, and the right-hand keys differently. '#' is none of them.
+  // the vowels and the right-hand keys differently. '#' is none of them. The star counts as a
+  // left-hand key: it's an index-finger key, usually hit with the left, not a thumb key like the vowels.
   function keyGroup(name) {
     const index = slotIndex.get(name);
     if (index === undefined || index === NUMBER_SLOT) return '';
+    if (name === '*') return 'left';
     if (index < LEFT_END) return 'left';
     if (index < 12) return 'middle';
     return 'right';
