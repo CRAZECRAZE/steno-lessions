@@ -80,6 +80,11 @@ test('keyGroup puts left-hand keys (star included), vowels, and right-hand keys 
   assert.deepEqual(groups, ['left', 'left', 'middle', 'left', 'middle', 'middle', 'right', 'right', '']);
 });
 
+test('displayOrder puts the star after the left-hand keys, before the vowels', () => {
+  assert.deepEqual(steno.displayOrder(steno.namesInBits(steno.parseStroke('SKWRAO*EUF'))),
+    ['S-', 'K-', 'W-', 'R-', '*', 'A-', 'O-', '-E', '-U', '-F']);
+});
+
 test('renderStroke writes a stroke bitmask in Plover notation', () => {
   for (const text of ['KAT', '-PB', 'TEFT', '#T', 'STKPWHR', '-FRPBLGTSDZ', '*', 'TK-PB', 'R-R']) {
     assert.equal(steno.renderStroke(steno.parseStroke(text)), text);

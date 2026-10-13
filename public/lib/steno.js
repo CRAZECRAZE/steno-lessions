@@ -81,6 +81,14 @@
     return names;
   }
 
+  // The same names, in the order the page shows them: the star sits at the end of the left-hand
+  // (orange) keys, just before the vowels, rather than between O and E where Plover writes it.
+  // Display only - bit positions, Plover notation and renderStroke are untouched.
+  function displayOrder(names) {
+    const rank = (name) => (name === '*' ? LEFT_END - 0.5 : slotIndex.get(name));
+    return names.slice().sort((a, b) => rank(a) - rank(b));
+  }
+
   const MAX_STROKES = 3;
 
   function popcount(bits) {
@@ -185,7 +193,7 @@
   }
 
   return {
-    SLOTS, parseStroke, parseLayout, namesInBits, buildWords, popcount, renderStroke, displayName,
+    SLOTS, parseStroke, parseLayout, namesInBits, displayOrder, buildWords, popcount, renderStroke, displayName,
     keyGroup, keyPair,
   };
 });

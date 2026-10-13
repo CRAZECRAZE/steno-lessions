@@ -470,7 +470,7 @@
         // built so far stays visible until the whole stroke ends.
         const live = status === 'current' ? heldBits() : 0;
         const madeThisStroke = status === 'current' ? state.chordBits : 0;
-        for (const name of S.namesInBits(bits)) {
+        for (const name of S.displayOrder(S.namesInBits(bits))) {
           const ch = document.createElement('span');
           const bit = 1 << state.slotIndex.get(name);
           const isHeld = (live & bit) !== 0;
@@ -490,14 +490,12 @@
           // the next attempt or the gap before it.
           const soundOf = (name) => state.slotByName.get(name)?.sound || name;
           const liveWrongNames = new Set(S.namesInBits(live & ~bits));
-          const wrongNames = S.namesInBits(madeThisStroke & ~bits);
+          const wrongNames = S.displayOrder(S.namesInBits(madeThisStroke & ~bits));
           errorEntries = wrongNames
             .map((name) => ({
-              at: state.slotIndex.get(name),
               text: soundOf(name),
               released: !liveWrongNames.has(name),
             }))
-            .sort((a, b) => a.at - b.at);
         }
         const keys = document.createElement('span');
         keys.className = `kc ${status}`;
