@@ -123,6 +123,8 @@
       words: [],
       lessonHistory: [],
       totalTyped: 0,
+      // Prestige levels finished (level -> true), shared across levels like totalTyped.
+      completed: {},
       scaffolds: defaultScaffolds(),
       scaffoldMarks: {},
       level: 1,
@@ -158,7 +160,8 @@
         total: KEY_ORDER.length,
         active,
         started,
-        done: unlocked >= KEY_ORDER.length,
+        allUnlocked: unlocked >= KEY_ORDER.length,
+        done: Boolean(progress.completed[level]),
       });
     }
     return rows;
@@ -230,6 +233,11 @@
     }
     if (Number.isFinite(saved.totalTyped)) {
       progress.totalTyped = Math.max(0, Math.floor(saved.totalTyped));
+    }
+    if (saved.completed && typeof saved.completed === 'object') {
+      for (const level of Object.keys(LEVEL_WPM)) {
+        if (saved.completed[level] === true) progress.completed[level] = true;
+      }
     }
     if (Number.isInteger(saved.level) && LEVEL_WPM[saved.level]) progress.level = saved.level;
     if (saved.stash && typeof saved.stash === 'object') {
@@ -318,13 +326,26 @@
   }
 
   // Whether the newest words are fast and accurate enough to unlock the next key.
-  function canUnlock(progress) {
-    if (progress.unlocked >= KEY_ORDER.length) return false;
+  function meetsTargets(progress) {
     const stats = windowStats(progress);
     return stats.count >= LESSON_SIZE
       && stats.wpm >= wpmTarget(progress.level)
       && stats.accuracy >= ACCURACY_TARGET
       && keysAccurateEnough(progress);
+  }
+
+  function canUnlock(progress) {
+    return progress.unlocked < KEY_ORDER.length && meetsTargets(progress);
+  }
+
+  // A prestige level is complete only once every key is unlocked AND a fresh lesson (the
+  // window restarts when the last key unlocks) clears the same speed and accuracy bars as an
+  // unlock. Merely unlocking the last key does not count. Once earned it stays earned.
+  function completeIfReady(progress) {
+    if (progress.completed[progress.level]) return false;
+    if (progress.unlocked < KEY_ORDER.length || !meetsTargets(progress)) return false;
+    progress.completed[progress.level] = true;
+    return true;
   }
 
   // Unlocks the next key if canUnlock says so. Starts counting words again from zero.
@@ -772,6 +793,7 @@
     MAX_LEVEL,
     levelFor,
     levelSummary,
+    completeIfReady,
     switchLevel,
   };
 });

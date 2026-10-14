@@ -434,13 +434,38 @@ test('levelSummary reports every level: the active one live, the others from the
   progress.unlocked = 10;
   const [one, two, three] = lessons.levelSummary(progress);
   assert.deepEqual([one.wpm, two.wpm, three.wpm], [28, 38, 50]);
-  assert.equal(one.done, true);
+  assert.equal(one.allUnlocked, true);
+  assert.equal(one.done, false, "unlocking every key is not completing the level");
   assert.equal(one.active, false);
   assert.equal(two.active, true);
   assert.equal(two.unlocked, 10);
   assert.equal(two.done, false);
   assert.equal(three.started, false);
   assert.equal(three.unlocked, lessons.START_KEYS);
+});
+
+test('a level is only complete after every key is unlocked and a fresh lesson hits the targets', () => {
+  const progress = lessons.emptyProgress();
+  progress.unlocked = lessons.KEY_ORDER.length - 1;
+  for (const name of lessons.unlockedNames(progress)) {
+    for (let i = 0; i < 10; i++) lessons.recordChord(progress, [name], 400, true);
+  }
+  for (let i = 0; i < lessons.LESSON_SIZE; i++) lessons.recordWord(progress, { ms: 1500, strokes: 1, misses: 0 });
+  assert.equal(lessons.completeIfReady(progress), false, 'last key not unlocked yet');
+  assert.equal(lessons.unlockIfReady(progress), true);
+  assert.equal(progress.unlocked, lessons.KEY_ORDER.length);
+  assert.equal(lessons.completeIfReady(progress), false, 'unlocking the last key does not complete the level');
+  assert.equal(lessons.levelSummary(progress)[0].done, false);
+  for (let i = 0; i < lessons.LESSON_SIZE; i++) lessons.recordWord(progress, { ms: 3000, strokes: 1, misses: 0 });
+  assert.equal(lessons.completeIfReady(progress), false, 'too slow');
+  for (let i = 0; i < lessons.LESSON_SIZE; i++) lessons.recordWord(progress, { ms: 1500, strokes: 1, misses: 0 });
+  assert.equal(lessons.completeIfReady(progress), true);
+  assert.equal(lessons.levelSummary(progress)[0].done, true);
+  assert.equal(lessons.completeIfReady(progress), false, 'only reports the moment it is earned');
+  const back = lessons.normalize(JSON.parse(JSON.stringify(progress)));
+  assert.equal(back.completed[1], true);
+  lessons.switchLevel(back, 2);
+  assert.equal(lessons.levelSummary(back)[0].done, true, 'stays earned while on another level');
 });
 
 test('unlocking at level 2 needs 38 wpm, level 3 needs 50', () => {
