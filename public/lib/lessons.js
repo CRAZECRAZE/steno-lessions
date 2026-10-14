@@ -42,8 +42,8 @@
   const KEY_ACCURACY_WINDOW = 30;
   // Keys under this recent accuracy get a reserved share of words that contain them, so a key
   // stuck below KEY_ACCURACY_TARGET still gets the reps it needs to climb out.
-  const DRILL_ACCURACY = 0.88;
-  const DRILL_SHARE = 0.5;
+  const DRILL_ACCURACY = 0.85;
+  const DRILL_SHARE = 0.2;
   // Attempts needed on a key before its rolling accuracy can gate an unlock.
   const KEY_ACCURACY_MIN_SAMPLES = 5;
   // The etude<->concerto complexity slider, 0-100. Below ETUDE_MAX: isolated, minimal-load
@@ -708,15 +708,30 @@
   // Bitmask of unlocked keys whose recent accuracy sits under DRILL_ACCURACY. Rare keys (-Z, #,
   // -D) show up in few words, so left to the weighted pick alone they never get enough reps to
   // lift their accuracy past the unlock bar; this mask feeds a reserved share of drill words.
-  function weakMask(progress, slotIndex) {
-    let mask = 0;
+  // Only the single worst key is drilled at a time, in short words whose other keys are not
+  // also weak, so a drill word stays easy apart from the one key it is there for.
+  function drillOptions(progress, slotIndex) {
+    let target = null;
+    let worst = DRILL_ACCURACY;
+    let weakBits = 0;
     for (const name of unlockedNames(progress)) {
       const stat = progress.keys[name];
-      if (stat && stat.recent.length >= KEY_ACCURACY_MIN_SAMPLES && keyAccuracy(progress, name) < DRILL_ACCURACY) {
-        mask |= 1 << slotIndex.get(name);
+      if (!stat || stat.recent.length < KEY_ACCURACY_MIN_SAMPLES) continue;
+      const accuracy = keyAccuracy(progress, name);
+      if (accuracy >= DRILL_ACCURACY) continue;
+      weakBits |= 1 << slotIndex.get(name);
+      if (accuracy < worst) {
+        worst = accuracy;
+        target = name;
       }
     }
-    return mask;
+    if (!target) return null;
+    const targetBit = 1 << slotIndex.get(target);
+    return {
+      requireMask: targetBit,
+      allowMask: unlockedMask(progress, slotIndex) & ~(weakBits & ~targetBit),
+      maxLength: ETUDE_MAX_LENGTH,
+    };
   }
 
   // One word, chosen for the live complexity band: 'etude' (isolated, minimal-load reps on
@@ -730,9 +745,9 @@
   function nextWord(words, progress, slotIndex, options = {}) {
     const { band, focus, pickOptions } = bandPickOptions(progress, slotIndex, options);
     let picked;
-    const drill = options.forceBand ? 0 : weakMask(progress, slotIndex);
+    const drill = options.forceBand ? null : drillOptions(progress, slotIndex);
     if (drill && (options.random || Math.random)() < DRILL_SHARE) {
-      picked = pickWords(words, progress, slotIndex, { ...options, requireMask: drill, count: 1 })[0];
+      picked = pickWords(words, progress, slotIndex, { ...options, ...drill, count: 1 })[0];
     }
     if (!picked) picked = pickWords(words, progress, slotIndex, { ...pickOptions, count: 1 })[0];
     // An etude restriction (or any band option) can legitimately leave nothing eligible early
@@ -749,11 +764,9 @@
   // (the band, the mask, `progress` itself) changes between them.
   function nextWords(words, progress, slotIndex, count, options = {}) {
     const { band, focus, pickOptions } = bandPickOptions(progress, slotIndex, options);
-    const drill = options.forceBand ? 0 : weakMask(progress, slotIndex);
+    const drill = options.forceBand ? null : drillOptions(progress, slotIndex);
     const drillCount = drill ? Math.round(count * DRILL_SHARE) : 0;
-    const picked = drillCount
-      ? pickWords(words, progress, slotIndex, { ...options, requireMask: drill, count: drillCount })
-      : [];
+    const picked = drillCount ? pickWords(words, progress, slotIndex, { ...options, ...drill, count: drillCount }) : [];
     const normal = pickWords(words, progress, slotIndex, {
       ...pickOptions,
       avoid: [...(options.avoid || []), ...picked.map((word) => word.text)],
