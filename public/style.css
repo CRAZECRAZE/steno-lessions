@@ -232,6 +232,7 @@ body {
 .key-tooltip .kt-sound { margin-left: 6px; opacity: 0.65; }
 .key-tooltip .kt-row { display: flex; justify-content: space-between; gap: 12px; }
 .key-tooltip .kt-row.muted { opacity: 0.75; }
+.key-tooltip .kt-row.note { white-space: normal; width: 200px; margin: 3px 0; opacity: 0.85; }
 
 main {
   max-width: 960px;

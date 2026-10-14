@@ -626,10 +626,14 @@
     el.addEventListener('blur', hideKeyTooltip);
   }
 
+  // What # is, for anyone who has never used a steno number bar.
+  const NUMBER_KEY_NOTE = 'Number bar: hold # with S T P H A O (1 2 3 4 5 0) and -F -P -L -T (6 7 8 9) to type digits, like #ST for 12.';
+
   function keyTooltipHtml(progress, name) {
     const slot = state.slotByName.get(name);
     const header = `<strong>${escapeHtml(S.displayName(name))}</strong>` +
-      (slot ? `<span class="kt-sound">${escapeHtml(slot.sound)}</span>` : '');
+      (slot ? `<span class="kt-sound">${escapeHtml(slot.sound)}</span>` : '') +
+      (name === '#' ? `<div class="kt-row note">${escapeHtml(NUMBER_KEY_NOTE)}</div>` : '');
     const stat = progress.keys[name];
     if (!stat || stat.ewmaMs === null || stat.samples < 5) {
       return `${header}<div class="kt-row muted">Not calibrated yet - needs more reps.</div>`;
@@ -715,7 +719,8 @@
     }
     const stat = progress.keys[name];
     const slot = state.slotByName.get(name);
-    const label = `<span class="chip-name">${escapeHtml(S.displayName(name))}</span>`;
+    const label = `<span class="chip-name">${escapeHtml(S.displayName(name))}</span>` +
+      (name === '#' ? ` <span class="muted">${escapeHtml(NUMBER_KEY_NOTE)}</span><br>` : '');
     if (!stat || stat.ewmaMs === null || stat.samples < 5) {
       el.innerHTML = `${label} <span class="muted">Not calibrated, need more samples.</span>`;
       return;
@@ -1113,6 +1118,9 @@
         state.progress = L.emptyProgress();
       }
     }
+    // The dictionary has no numbers, so add every one-stroke number: the only way to practice
+    // the # key, which makes digits when held with other keys.
+    state.data.words = state.data.words.concat(S.buildNumberWords());
     buildIndexes(state.data.layout);
     buildStrokeIndex(state.data.words);
     loadFullResolver();

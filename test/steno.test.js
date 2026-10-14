@@ -85,6 +85,22 @@ test('displayOrder puts the star after the left-hand keys, before the vowels', (
     ['S-', 'K-', 'W-', 'R-', '*', 'A-', 'O-', '-E', '-U', '-F']);
 });
 
+test('buildNumberWords makes every one-stroke number, in steno order, using the # key', () => {
+  const words = steno.buildNumberWords();
+  assert.equal(words.length, 1023);
+  const byText = new Map(words.map((word) => [word.text, word]));
+  assert.deepEqual(byText.get('12').shown, ['#ST']);
+  assert.deepEqual(byText.get('10').shown, ['#SO']);
+  assert.deepEqual(byText.get('9').shown, ['#-T']);
+  assert.equal(byText.get('21'), undefined, 'out of steno order, so not one stroke');
+  assert.equal(byText.get('11'), undefined);
+  for (const word of words) {
+    assert.equal(word.variants.length, 1);
+    assert.equal(steno.renderStroke(word.variants[0][0]), word.shown[0]);
+    assert.ok(word.variants[0][0] & (1 << 22), `${word.text} uses #`);
+  }
+});
+
 test('renderStroke writes a stroke bitmask in Plover notation', () => {
   for (const text of ['KAT', '-PB', 'TEFT', '#T', 'STKPWHR', '-FRPBLGTSDZ', '*', 'TK-PB', 'R-R']) {
     assert.equal(steno.renderStroke(steno.parseStroke(text)), text);

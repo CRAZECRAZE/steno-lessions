@@ -130,6 +130,30 @@
       .sort((a, b) => a.text.localeCompare(b.text));
   }
 
+  // With the number key (#) held, these keys type digits instead of letters. Listed in steno
+  // order, which is also the order digits come out of a single stroke.
+  const DIGIT_KEYS = [['S-', '1'], ['T-', '2'], ['P-', '3'], ['H-', '4'], ['A-', '5'], ['O-', '0'],
+    ['-F', '6'], ['-P', '7'], ['-L', '8'], ['-T', '9']];
+
+  // Every number that fits in one # stroke: any combination of digit keys, written in steno
+  // order (so 1, 12, 150, 1230 ... but not 21 or 11, which need more than one stroke). The
+  // dictionary build keeps only plain lowercase words, so none of these are in it otherwise.
+  function buildNumberWords() {
+    const words = [];
+    for (let mask = 1; mask < 1 << DIGIT_KEYS.length; mask++) {
+      let bits = 1 << NUMBER_SLOT;
+      let text = '';
+      DIGIT_KEYS.forEach(([name, digit], i) => {
+        if (mask & (1 << i)) {
+          bits |= 1 << slotIndex.get(name);
+          text += digit;
+        }
+      });
+      words.push({ text, shown: [renderStroke(bits)], variants: [[bits]], isNumber: true });
+    }
+    return words;
+  }
+
   // Plover notation for a stroke mask, the reverse of parseStroke. Mirrors render_stroke in
   // keymux: a dash marks right-hand keys when there is no vowel or star before them.
   function renderStroke(bits) {
@@ -193,7 +217,7 @@
   }
 
   return {
-    SLOTS, parseStroke, parseLayout, namesInBits, displayOrder, buildWords, popcount, renderStroke, displayName,
+    SLOTS, parseStroke, parseLayout, namesInBits, displayOrder, buildWords, buildNumberWords, popcount, renderStroke, displayName,
     keyGroup, keyPair,
   };
 });
