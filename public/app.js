@@ -107,25 +107,15 @@
     return true;
   }
 
-  function allScaffoldsOff() {
-    return SCAFFOLD_BOXES.every(([flag]) => !state.progress.scaffolds[flag]);
-  }
+  // The checkboxes and key hints a prestige level asks for, for the level cards' click-to-switch.
+  const LEVEL_SETTINGS = {
+    1: { scaffolds: { labels: true, target: true, keyboard: true }, hints: false },
+    2: { scaffolds: { labels: true, target: true, keyboard: false }, hints: false },
+    3: { scaffolds: { labels: false, target: false, keyboard: false }, hints: false },
+  };
 
-  // A save that already has a scaffold off (or all three) with no redo baseline on record -
-  // either from before this feature existed, or freshly imported from someone else's clipboard
-  // export - gets right now as that baseline, rather than letting mastery earned before this
-  // moment count as an instant, unearned scaffold-off badge.
-  function ensureScaffoldMarks() {
-    for (const [flag] of SCAFFOLD_BOXES) {
-      if (!state.progress.scaffolds[flag]) L.ensureScaffoldMark(state.progress, flag);
-    }
-    if (allScaffoldsOff()) L.ensureScaffoldMark(state.progress, 'all');
-  }
-
-  // Three scaffolds, each its own checkbox - checked (the default) means "always show,
-  // ignore mastery", unchecked means "let scaffoldTier fade it in automatically." Nothing is
-  // ever taken away with no way back: fading is only ever something a learner opts into by
-  // unchecking a box, never a default sprung on a fresh or imported profile. Ordered least ->
+  // Three scaffolds, each its own checkbox: checked shows it, unchecked hides it right away.
+  // The combination you leave on is your prestige level (see L.levelFor). Ordered least ->
   // most consequential to remove. These live in state.progress.scaffolds (not localStorage),
   // so they travel with the exported/imported progress blob like everything else.
   const escapeHtml = (text) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -648,9 +638,7 @@
       `<div class="kt-row"><span>Confidence</span><span>${confidence}% (${tierLabel})</span></div>`;
   }
 
-  // Row 2: one chip per key, unlocked keys tinted by confidence, the focus key outlined, plus
-  // a trailing row of vanity trophy chips - purely derived from mastery tiers, no state of
-  // their own, so there is nothing to desync or corrupt on an old or partial save.
+  // Row 2: one chip per key, unlocked keys tinted by confidence, the focus key outlined.
   function renderKeyChips() {
     const { progress } = state;
     const focus = L.focusKey(progress);
@@ -675,37 +663,52 @@
       bindKeyTooltip(chip, tooltipHtml);
       list.appendChild(chip);
     });
-    const unlockedNames = L.unlockedNames(progress);
-    const masteredCount = unlockedNames.filter((name) => L.masteryTier(progress, name) >= 2).length;
-    const allMastered = unlockedNames.length > 0 && masteredCount === unlockedNames.length;
-    // The scaffold-off badges below need every key re-mastered using only practice recorded
-    // since that scaffold last went off (L.scaffoldRedoMastered) - not just "mastered right
-    // now, box happens to be unchecked", which a save already at gold could satisfy by
-    // toggling a box with zero further practice.
-    const scaffolds = progress.scaffolds;
-    const redoLabels = !scaffolds.labels && L.scaffoldRedoMastered(progress, 'labels');
-    const redoTarget = !scaffolds.target && L.scaffoldRedoMastered(progress, 'target');
-    const redoKeyboard = !scaffolds.keyboard && L.scaffoldRedoMastered(progress, 'keyboard');
-    // The ultimate badge has its own 'all' mark (set only when all three go off together, see
-    // allScaffoldsOff in init) - it must not fire from three separately-earned redo periods
-    // that never actually overlapped.
-    const redoAll = allScaffoldsOff() && L.scaffoldRedoMastered(progress, 'all');
-    const badges = [
-      { cls: 'silver', label: 'Half your sounds mastered', earned: masteredCount >= Math.ceil(unlockedNames.length / 2) },
-      { cls: 'gold', label: 'Every sound mastered', earned: allMastered },
-      { cls: 'platinum', label: 'Every sound re-mastered with stroke labels off', earned: redoLabels },
-      { cls: 'diamond', label: 'Every sound re-mastered with the target highlight off', earned: redoTarget },
-      { cls: 'obsidian', label: 'Every sound re-mastered with the keyboard diagram off', earned: redoKeyboard },
-      { cls: 'ultimate', label: 'Every sound re-mastered with every scaffold off at once', earned: redoAll },
-    ];
-    for (const badge of badges) {
-      const chip = document.createElement('li');
-      chip.className = `vanity ${badge.cls}${badge.earned ? ' earned' : ' locked'}`;
-      chip.textContent = '★';
-      const label = badge.earned ? badge.label : `Locked: ${badge.label}`;
-      bindKeyTooltip(chip, `<div class="kt-row">${escapeHtml(label)}</div>`);
-      list.appendChild(chip);
+  }
+
+  // What each prestige level asks you to keep off, in plain words.
+  const LEVEL_RULES = {
+    1: 'Any help allowed: keyboard diagram or key hints',
+    2: 'No diagram or hints. Stroke labels and target highlight still on',
+    3: 'No help at all: just the word',
+  };
+
+  // The three prestige cards under the key chips: what the level is, its speed bar, your
+  // progress on it, and which one you are on. Clicking one sets the checkboxes for it.
+  function renderPrestige() {
+    const list = $('prestige');
+    list.textContent = '';
+    for (const row of L.levelSummary(state.progress)) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = `prestige${row.active ? ' active' : ''}${row.done ? ' done' : ''}`;
+      const status = row.done ? 'Complete' : row.active ? 'You are here' : row.started ? 'In progress' : 'Not started';
+      card.innerHTML =
+        `<span class="p-title">Prestige ${row.level} <span class="p-wpm">${row.wpm} wpm</span></span>` +
+        `<span class="p-rule">${escapeHtml(LEVEL_RULES[row.level])}</span>` +
+        `<span class="p-bar"><span style="width:${Math.round((row.unlocked / row.total) * 100)}%"></span></span>` +
+        `<span class="p-status">${row.unlocked}/${row.total} keys &middot; ${status}</span>`;
+      card.title = row.active ? 'The level you are on now' : `Switch to prestige ${row.level}. Your keys on each level are kept separately.`;
+      card.addEventListener('click', () => chooseLevel(row.level));
+      list.appendChild(card);
     }
+  }
+
+  // Sets the checkboxes and key hints a level asks for, which in turn moves progress to it.
+  function chooseLevel(level) {
+    if (level === state.progress.level) return;
+    const settings = LEVEL_SETTINGS[level];
+    Object.assign(state.progress.scaffolds, settings.scaffolds);
+    state.hints = settings.hints;
+    try {
+      localStorage.setItem(HINTS_KEY, state.hints ? 'on' : 'off');
+    } catch {
+      // Saving is only a convenience; the setting still applies for this visit
+    }
+    applyHints();
+    applyScaffoldBoxes();
+    syncLevel();
+    saveProgress();
+    refresh();
   }
 
   // Row 3: the key most in need of practice right now, and what we know about it.
@@ -791,6 +794,7 @@
   function renderHud() {
     renderMetrics();
     renderKeyChips();
+    renderPrestige();
     renderCurrentKey();
     renderUnlockStatus();
     renderLessonHistory();
@@ -1139,23 +1143,11 @@
       refresh();
     });
     L.switchLevel(state.progress, L.levelFor(state.progress.scaffolds, state.hints));
-    ensureScaffoldMarks();
     applyScaffoldBoxes();
     for (const [flag, id] of SCAFFOLD_BOXES) {
       $(id).addEventListener('change', (event) => {
-        const wasAllOff = allScaffoldsOff();
-        const turnedOff = state.progress.scaffolds[flag] && !event.target.checked;
         state.progress.scaffolds[flag] = event.target.checked;
-        // Before the redo marks below, so they land on the level you end up on.
         syncLevel();
-        // A fresh baseline every time it's turned off (not just the first time) - having
-        // earned a scaffold-off badge once before doesn't let a later off period skip redoing
-        // the mastery, since confidence never resets just because a box got checked again.
-        if (turnedOff) L.recordScaffoldOff(state.progress, flag);
-        // The ultimate badge needs mastery re-earned with all three off *together*, not three
-        // separately-earned redo periods that never overlapped - so it gets its own mark, only
-        // reset at the moment all three actually become off at once.
-        if (!wasAllOff && allScaffoldsOff()) L.recordScaffoldOff(state.progress, 'all');
         saveProgress();
         refresh();
       });
@@ -1185,7 +1177,6 @@
       state.recent = [];
       state.queue = [];
       L.switchLevel(state.progress, L.levelFor(state.progress.scaffolds, state.hints));
-      ensureScaffoldMarks();
       applyScaffoldBoxes();
       refillQueue();
       refillGhostWords();

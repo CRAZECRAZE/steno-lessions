@@ -160,51 +160,38 @@ body {
 .key-chips li.tier-1 { border-color: color-mix(in srgb, var(--good) 40%, transparent); }
 .key-chips li.tier-2 { border-style: double; border-width: 3px; border-color: var(--good); }
 
-/* Vanity trophy chips: silver/gold, purely derived, no state of their own. Kept visually
-   distinct from the confidence-gradient chips above so they read as trophies, not live stats. */
-.key-chips li.vanity {
-  font-weight: 700;
-  border-style: solid;
+/* Prestige cards: one per level, saying what is allowed, the speed bar and your progress. */
+.prestige-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
-.key-chips li.vanity.locked {
-  background: transparent;
-  color: var(--muted);
-  border-color: var(--line);
-  opacity: 0.5;
+.prestige {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
 }
-.key-chips li.vanity.silver.earned { background: #c0c0c8; color: #2a2a2e; border-color: #9a9aa2; }
-.key-chips li.vanity.gold.earned {
-  background: linear-gradient(135deg, #ffd76a, #e8a93a);
-  color: #3a2600;
-  border-color: #c98a1a;
-  box-shadow: 0 0 6px rgba(232, 169, 58, 0.6);
-}
-/* Prestige badges: every sound mastered all over again with one scaffold (or all three)
-   actually gone, not just dimmed - least consequential scaffold removed first, same order
-   as SCAFFOLD_BOXES, ending in the hardest, keyboard-diagram-off run and the all-three combo. */
-.key-chips li.vanity.platinum.earned {
-  background: linear-gradient(135deg, #e6e9f0, #b7bfcf);
-  color: #22242c;
-  border-color: #8d96ab;
-  box-shadow: 0 0 6px rgba(141, 150, 171, 0.6);
-}
-.key-chips li.vanity.diamond.earned {
-  background: linear-gradient(135deg, #bdf1ff, #6cc8e8);
-  color: #0a2b33;
-  border-color: #3aa6c9;
-  box-shadow: 0 0 6px rgba(58, 166, 201, 0.6);
-}
-.key-chips li.vanity.obsidian.earned {
-  background: linear-gradient(135deg, #3a3240, #15121a);
-  color: #d9c9ff;
-  border-color: #9a7fe0;
-  box-shadow: 0 0 6px rgba(154, 127, 224, 0.6);
-}
-.key-chips li.vanity.ultimate.earned {
-  background: linear-gradient(135deg, #ff9a6c, #ff5fa2, #7f5fff);
-  color: #2a0a1a;
-  border-color: #ff5fa2;
-  box-shadow: 0 0 8px rgba(255, 95, 162, 0.7);
+.prestige:hover { border-color: var(--muted); }
+.prestige.active { border-color: var(--target); box-shadow: 0 0 0 1px var(--target); }
+.prestige.done { border-color: var(--good); }
+.prestige .p-title { font-weight: 700; font-size: 13px; }
+.prestige .p-wpm { font-weight: 500; color: var(--muted); margin-left: 4px; }
+.prestige .p-rule { color: var(--muted); }
+.prestige .p-bar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; margin-top: 2px; }
+.prestige .p-bar span { display: block; height: 100%; background: var(--target); }
+.prestige.done .p-bar span { background: var(--good); }
+.prestige .p-status { color: var(--ink); }
+@media (max-width: 640px) {
+  .prestige-row { grid-template-columns: 1fr; }
 }
 
 .key-chips li { cursor: default; outline-offset: 2px; }

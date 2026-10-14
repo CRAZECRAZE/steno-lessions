@@ -427,6 +427,22 @@ test('level and the other level\'s stash survive normalize', () => {
   assert.equal(lessons.normalize({ level: 9 }).level, 1);
 });
 
+test('levelSummary reports every level: the active one live, the others from the stash', () => {
+  const progress = lessons.emptyProgress();
+  progress.unlocked = lessons.KEY_ORDER.length;
+  lessons.switchLevel(progress, 2);
+  progress.unlocked = 10;
+  const [one, two, three] = lessons.levelSummary(progress);
+  assert.deepEqual([one.wpm, two.wpm, three.wpm], [28, 38, 50]);
+  assert.equal(one.done, true);
+  assert.equal(one.active, false);
+  assert.equal(two.active, true);
+  assert.equal(two.unlocked, 10);
+  assert.equal(two.done, false);
+  assert.equal(three.started, false);
+  assert.equal(three.unlocked, lessons.START_KEYS);
+});
+
 test('unlocking at level 2 needs 38 wpm, level 3 needs 50', () => {
   const progress = lessons.emptyProgress();
   progress.level = 2;

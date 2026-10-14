@@ -142,6 +142,28 @@
     return slice;
   }
 
+  // One row per prestige level for the HUD: its wpm bar, how many keys you have unlocked on
+  // it, whether you are on it now, and whether every key is unlocked there ("done").
+  function levelSummary(progress) {
+    const rows = [];
+    for (let level = 1; level <= MAX_LEVEL; level++) {
+      const active = level === progress.level;
+      const slice = active ? progress : progress.stash[level];
+      const unlocked = slice ? slice.unlocked : START_KEYS;
+      const started = active || Boolean(slice && (slice.unlocked > START_KEYS || Object.keys(slice.keys).length > 0));
+      rows.push({
+        level,
+        wpm: LEVEL_WPM[level],
+        unlocked,
+        total: KEY_ORDER.length,
+        active,
+        started,
+        done: unlocked >= KEY_ORDER.length,
+      });
+    }
+    return rows;
+  }
+
   // Moves to prestige `level`: the current level's progress is set aside and the target
   // level's is loaded (a brand new start if it has none yet). Returns true if it changed.
   function switchLevel(progress, level) {
@@ -749,6 +771,7 @@
     LEVEL_WPM,
     MAX_LEVEL,
     levelFor,
+    levelSummary,
     switchLevel,
   };
 });
