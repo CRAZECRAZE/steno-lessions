@@ -543,3 +543,21 @@ test('kinematicGap flags a key whose isolated probe reps are not substantially f
   for (let i = 0; i < 5; i++) lessons.recordProbe(stuck, 'T-', 980);
   assert.equal(lessons.kinematicGap(stuck, 'T-') <= lessons.HEALTHY_PROBE_GAP, true);
 });
+
+test('all three levels keep separate progress through any order of switching and a save round-trip', () => {
+  let progress = lessons.emptyProgress();
+  const set = (level, unlocked) => {
+    lessons.switchLevel(progress, level);
+    progress.unlocked = unlocked;
+    lessons.recordChord(progress, ['T-'], 400, true);
+  };
+  set(1, 20);
+  set(2, 10);
+  set(3, 7);
+  progress = lessons.normalize(JSON.parse(JSON.stringify(progress)));
+  for (const [level, unlocked] of [[2, 10], [1, 20], [3, 7], [1, 20], [2, 10]]) {
+    lessons.switchLevel(progress, level);
+    assert.equal(progress.unlocked, unlocked, `level ${level} unlocked`);
+    assert.equal(progress.keys['T-'].samples, 1, `level ${level} stats`);
+  }
+});
