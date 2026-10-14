@@ -36,6 +36,27 @@ test('parseLayout reads keymux layout output into keys and combined keys', () =>
   assert.equal(comma.bits, (1 << 10) | (1 << 11));
 });
 
+test('parseLayout keeps a steno key\'s first row as its own and treats repeats as extra keys', () => {
+  const layout = steno.parseLayout(`${layoutText.trimEnd()}\nS-  Q  s\n*  G  *\n#  2  #\n`);
+  assert.equal(layout.slots.length, 23);
+  assert.equal(layout.slots.find((slot) => slot.name === 'S-').label, 'A');
+  assert.equal(layout.slots.find((slot) => slot.name === '#').label, '1');
+  const q = layout.keys.find((key) => key.label === 'Q');
+  assert.equal(q.bits, 1 << 0);
+  assert.equal(q.combined, false);
+  assert.equal(layout.keys.find((key) => key.label === 'G').bits, 1 << 9);
+  assert.equal(layout.keys.find((key) => key.label === '2').bits, 1 << 22);
+});
+
+test('the bundled layout presses S- on Q, * on G, and # on every number-row key', () => {
+  const bundle = require('../public/data/bundle.json');
+  const bitsFor = (label) => bundle.layout.keys.find((key) => key.label === label).bits;
+  assert.equal(bitsFor('A'), bitsFor('Q'));
+  assert.equal(bitsFor('T'), bitsFor('G'));
+  for (const digit of '1234567890') assert.equal(bitsFor(digit), 1 << 22, digit);
+  assert.equal(bundle.layout.slots.length, 23);
+});
+
 test('namesInBits lists the steno keys in a stroke in Plover order', () => {
   assert.deepEqual(steno.namesInBits(steno.parseStroke('KAT')), ['K-', 'A-', '-T']);
 });

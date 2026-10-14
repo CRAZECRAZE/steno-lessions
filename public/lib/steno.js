@@ -64,7 +64,9 @@
         if (!slotIndex.has(part)) throw new Error(`unknown steno key "${part}" in layout`);
         bits |= 1 << slotIndex.get(part);
       }
-      if (parts.length === 1) {
+      // A steno key can list a second physical key later (an extra key, like Q for S-). The
+      // first row is the key's own; the extra rows only add to `keys`.
+      if (parts.length === 1 && !slots.some((slot) => slot.name === name)) {
         slots.push({ name, index: slotIndex.get(name), sound, label });
       }
       keys.push({ label, bits, combined: parts.length > 1, name, sound });
