@@ -484,14 +484,14 @@ body.paused #practice .feedback {
   overflow-x: auto;
 }
 
-.keyboard { --u: 46px; }
+.keyboard { --u: 46px; --gap: 6px; --kh: 50px; }
 
-.kb-row { display: flex; gap: 6px; justify-content: center; }
+.kb-row { display: flex; gap: var(--gap); justify-content: center; }
 
 .key {
   position: relative;
   width: var(--u);
-  height: 50px;
+  height: var(--kh);
   flex: 0 0 auto;
   border-radius: 8px;
   border: 1px solid var(--line);
@@ -512,6 +512,17 @@ body.paused #practice .feedback {
 .key.w225 { width: calc(var(--u) * 2.25); }
 .key.w25 { width: calc(var(--u) * 2.5); }
 .key.w6 { width: calc(var(--u) * 6); }
+
+/* Two physical keys drawn as one tall key (Q+A, T+G): it sits in the upper row, is two rows
+   high, and gives back the extra height so the row below keeps its place; the row below leaves
+   an invisible .spacer where the key's lower half is. */
+.key.tall {
+  height: calc(var(--kh) * 2 + var(--gap));
+  margin-bottom: calc(-1 * (var(--kh) + var(--gap)));
+  z-index: 1;
+}
+.key.spacer { visibility: hidden; }
+.key.tall.steno .main.sound { top: 50%; transform: translateY(-50%); }
 
 .key .shift {
   position: absolute;

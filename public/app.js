@@ -10,14 +10,21 @@
   const letter = (label) => ({ label });
   const sym = (label, shift) => ({ label, shift });
   const named = (label, code, width) => ({ label, code, width });
+  // Several physical keys drawn as one: they all press the same steno key. `span` is how many
+  // key widths it covers, `tall` makes it two rows high (it sits in the upper row and the row
+  // below leaves a `gap` where its lower half is), `display` is the letters shown on it.
+  const merged = (codes, display, { span, tall } = {}) => ({ label: display, codes, display, span, tall });
+  const gap = { spacer: true };
+  const NUMBER_CODES = [...'1234567890'].map((digit) => `Digit${digit}`);
   const ROWS = [
-    [sym('`', '~'), sym('1', '!'), sym('2', '@'), sym('3', '#'), sym('4', '$'), sym('5', '%'),
-      sym('6', '^'), sym('7', '&'), sym('8', '*'), sym('9', '('), sym('0', ')'), sym('-', '_'),
+    [sym('`', '~'), merged(NUMBER_CODES, '1 2 3 4 5 6 7 8 9 0', { span: 10 }), sym('-', '_'),
       sym('=', '+'), named('Backspace', 'Backspace', 'w2')],
-    [named('Tab', 'Tab', 'w15'), ...'QWERTYUIOP'.split('').map(letter), sym('[', '{'), sym(']', '}'),
-      sym('\\', '|', 'w15')],
-    [named('Caps Lock', 'CapsLock', 'w175'), ...'ASDFGHJKL'.split('').map(letter), sym(';', ':'),
-      sym("'", '"'), named('Enter', 'Enter', 'w2')],
+    // Q and A are both S-, T and G are both *: one tall key each, spanning both rows
+    [named('Tab', 'Tab', 'w15'), merged(['KeyQ', 'KeyA'], 'Q A', { tall: true }),
+      ...'WER'.split('').map(letter), merged(['KeyT', 'KeyG'], 'T G', { tall: true }),
+      ...'YUIOP'.split('').map(letter), sym('[', '{'), sym(']', '}'), sym('\\', '|', 'w15')],
+    [named('Caps Lock', 'CapsLock', 'w15'), gap, ...'SDF'.split('').map(letter), gap,
+      ...'HJKL'.split('').map(letter), sym(';', ':'), sym("'", '"'), named('Enter', 'Enter', 'w225')],
     [named('Shift', 'ShiftLeft', 'w225'), ...'ZXCVBNM'.split('').map(letter), sym(',', '<'),
       sym('.', '>'), sym('/', '?'), named('Shift', 'ShiftRight', 'w25')],
     [named('Ctrl', 'ControlLeft', 'w15'), named('Alt', 'AltLeft', 'w15'),
@@ -128,7 +135,7 @@
     slotByName: new Map(), // "S-" -> { name, sound, label }
     strokeWord: new Map(), // single-stroke chord bits -> the word it translates to
     hints: readHints(),
-    keyEls: new Map(), // event.code -> element
+    keyEls: new Map(), // key element -> the event.codes it stands for (several for a merged key)
     queue: [], // live, rolling buffer of upcoming words - queue[0] is the one being typed
     ghostWords: [], // decorative real words past the queue, never typed or recorded - see GHOST_COUNT
     recent: [], // words used lately, so the queue does not repeat them
@@ -268,11 +275,21 @@
       const row = document.createElement('div');
       row.className = 'kb-row';
       for (const key of keys) {
-        const code = key.code || codeFor(key.label);
+        if (key.spacer) {
+          // Where the lower half of a tall key above sits; nothing to draw
+          const hole = document.createElement('div');
+          hole.className = 'key spacer';
+          row.appendChild(hole);
+          continue;
+        }
+        const codes = key.codes || [key.code || codeFor(key.label)];
+        const code = codes[0];
         const el = document.createElement('div');
         el.className = 'key';
         el.dataset.code = code;
         if (key.width) el.classList.add(key.width);
+        if (key.tall) el.classList.add('tall');
+        if (key.span) el.style.width = `calc(var(--u) * ${key.span} + var(--gap) * ${key.span - 1})`;
         if (fingerByCode.has(code)) el.dataset.finger = fingerByCode.get(code);
         if (HOME_ROW.has(code)) el.classList.add('home');
         const info = state.infoByCode.get(code);
@@ -280,7 +297,7 @@
           // Steno keys show the sound big, and the letter small in the corner
           const letterEl = document.createElement('span');
           letterEl.className = 'letter';
-          letterEl.textContent = info.label;
+          letterEl.textContent = key.display || info.label;
           el.appendChild(letterEl);
           const main = document.createElement('span');
           main.className = 'main sound';
@@ -298,7 +315,7 @@
           main.textContent = key.label;
           el.appendChild(main);
         }
-        state.keyEls.set(code, el);
+        state.keyEls.set(el, codes);
         row.appendChild(el);
       }
       keyboard.appendChild(row);
@@ -321,12 +338,12 @@
     // Most consequential scaffold: off collapses the keyboard to an empty box (its rows
     // removed, not merely dimmed), so there's no half-visible crutch to lean on.
     $('keyboard').classList.toggle('empty', !keyboardOn);
-    for (const [code, el] of state.keyEls) {
-      const info = state.infoByCode.get(code);
+    for (const [el, codes] of state.keyEls) {
+      const info = state.infoByCode.get(codes[0]);
       el.classList.toggle('steno', Boolean(info));
       el.classList.toggle('locked', Boolean(info) && (info.bits & ~mask) !== 0);
       el.classList.toggle('target', state.hints && targetOn && Boolean(info) && target !== 0 && (info.bits & target) === info.bits);
-      el.classList.toggle('down', state.pressed.has(code));
+      el.classList.toggle('down', codes.some((code) => state.pressed.has(code)));
     }
   }
 
