@@ -160,39 +160,20 @@ body {
 .key-chips li.tier-1 { border-color: color-mix(in srgb, var(--good) 40%, transparent); }
 .key-chips li.tier-2 { border-style: double; border-width: 3px; border-color: var(--good); }
 
-/* Prestige cards: one per level, saying what is allowed, the speed bar and your progress. */
-.prestige-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-.prestige {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  text-align: left;
-  font: inherit;
-  font-size: 12px;
-  color: var(--ink);
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 10px;
+/* Prestige stars after the key chips: muted until the level is complete, then gold. */
+.key-chips li.prestige-star {
   cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+  opacity: 0.55;
 }
-.prestige:hover { border-color: var(--muted); }
-.prestige.active { border-color: var(--target); box-shadow: 0 0 0 1px var(--target); }
-.prestige.done { border-color: var(--good); }
-.prestige .p-title { font-weight: 700; font-size: 13px; }
-.prestige .p-wpm { font-weight: 500; color: var(--muted); margin-left: 4px; }
-.prestige .p-rule { color: var(--muted); }
-.prestige .p-bar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; margin-top: 2px; }
-.prestige .p-bar span { display: block; height: 100%; background: var(--target); }
-.prestige.done .p-bar span { background: var(--good); }
-.prestige .p-status { color: var(--ink); }
-@media (max-width: 640px) {
-  .prestige-row { grid-template-columns: 1fr; }
-}
+.key-chips li.prestige-star.active { opacity: 1; border-color: var(--target); }
+.key-chips li.prestige-star.done { color: #e8a93a; opacity: 1; text-shadow: 0 0 6px rgba(232, 169, 58, 0.6); }
+.key-tooltip .kt-bar { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.25); overflow: hidden; margin: 4px 0; }
+.key-tooltip .kt-bar span { display: block; height: 100%; background: var(--good); }
 
 .key-chips li { cursor: default; outline-offset: 2px; }
 

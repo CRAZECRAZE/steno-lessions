@@ -672,24 +672,29 @@
     3: 'No help at all: just the word',
   };
 
-  // The three prestige cards under the key chips: what the level is, its speed bar, your
-  // progress on it, and which one you are on. Clicking one sets the checkboxes for it.
+  // Three stars after the key chips, one per prestige level: gold once the level is complete
+  // (every key unlocked and the final lesson passed), outlined for the one you are on. Hover
+  // for what the level asks, its speed bar and your progress; click to switch to it.
   function renderPrestige() {
-    const list = $('prestige');
-    list.textContent = '';
+    const list = $('key-chips');
     for (const row of L.levelSummary(state.progress)) {
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = `prestige${row.active ? ' active' : ''}${row.done ? ' done' : ''}`;
-      const status = row.done ? 'Complete' : row.active ? 'You are here' : row.started ? 'In progress' : 'Not started';
-      card.innerHTML =
-        `<span class="p-title">Prestige ${row.level} <span class="p-wpm">${row.wpm} wpm</span></span>` +
-        `<span class="p-rule">${escapeHtml(LEVEL_RULES[row.level])}</span>` +
-        `<span class="p-bar"><span style="width:${Math.round((row.unlocked / row.total) * 100)}%"></span></span>` +
-        `<span class="p-status">${row.unlocked}/${row.total} keys &middot; ${status}</span>`;
-      card.title = row.active ? 'The level you are on now' : `Switch to prestige ${row.level}. Your keys on each level are kept separately.`;
-      card.addEventListener('click', () => chooseLevel(row.level));
-      list.appendChild(card);
+      const star = document.createElement('li');
+      star.className = `prestige-star${row.active ? ' active' : ''}${row.done ? ' done' : ''}`;
+      star.textContent = '\u2605';
+      let status = 'Not started';
+      if (row.done) status = 'Complete';
+      else if (row.allUnlocked) status = `All keys unlocked. Hit ${row.wpm} wpm at ${Math.round(L.ACCURACY_TARGET * 100)}%+ to finish`;
+      else if (row.active || row.started) status = `${row.unlocked}/${row.total} keys unlocked${row.active ? ' - you are here' : ''}`;
+      // Full only once complete: unlocking the last key is not finishing the level.
+      const fill = row.done ? 100 : Math.round((Math.min(row.unlocked, row.total - 1) / row.total) * 100);
+      bindKeyTooltip(star,
+        `<strong>Prestige ${row.level}<span class="kt-sound">${row.wpm} wpm</span></strong>` +
+        `<div class="kt-row note">${escapeHtml(LEVEL_RULES[row.level])}</div>` +
+        `<div class="kt-bar"><span style="width:${fill}%"></span></div>` +
+        `<div class="kt-row note">${escapeHtml(status)}</div>` +
+        (row.active ? '' : `<div class="kt-row note muted">Click to switch. Each level keeps its own keys.</div>`));
+      star.addEventListener('click', () => chooseLevel(row.level));
+      list.appendChild(star);
     }
   }
 
@@ -771,7 +776,7 @@
   function renderUnlockStatus() {
     const { progress } = state;
     const el = $('unlock-status');
-    if (progress.unlocked >= L.KEY_ORDER.length) {
+    if (progress.completed[progress.level]) {
       el.textContent = '';
       return;
     }
@@ -931,10 +936,10 @@
   }
 
   let unlockToastTimer = null;
-  function showUnlockToast(text, allKeys) {
+  function showUnlockToast(text, allKeys, label) {
     const toast = $('unlock-toast');
     clearTimeout(unlockToastTimer);
-    $('unlock-label').textContent = allKeys ? 'All keys unlocked' : 'Key unlocked';
+    $('unlock-label').textContent = label || (allKeys ? 'All keys unlocked' : 'Key unlocked');
     $('unlock-name').textContent = text;
     toast.classList.toggle('all-keys', Boolean(allKeys));
     // Force a reflow so re-triggering the toast on back-to-back unlocks restarts the
@@ -972,6 +977,9 @@
         'good',
       );
       showUnlockToast(allKeys ? 'All Keys!' : `${S.displayName(name)} (${sound})`, allKeys);
+    } else if (L.completeIfReady(state.progress)) {
+      setFeedback(`Prestige ${state.progress.level} complete!`, 'good');
+      showUnlockToast(`Prestige ${state.progress.level}`, true, 'Complete');
     }
 
     // Purely cosmetic break-reminder, every LESSON_SIZE words - a human milestone, not a
