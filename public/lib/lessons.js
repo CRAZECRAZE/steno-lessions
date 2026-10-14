@@ -81,9 +81,19 @@
   // accuracy gating (KEY_ACCURACY_TARGET) is what actually proves a new key is mastered,
   // so a rising speed target on top of that only punished the lesson right after a brand
   // new, still-unfamiliar key was introduced.
-  const WPM_TARGET = 35;
-  function wpmTarget() {
-    return WPM_TARGET;
+  // Per prestige level: 1 is learning every key with any scaffold still on, 2 is the same with
+  // every scaffold off (see levelFor), which asks for more speed.
+  const LEVEL_WPM = { 1: 28, 2: 38 };
+  const MAX_LEVEL = 2;
+  function wpmTarget(level = 1) {
+    return LEVEL_WPM[level] || LEVEL_WPM[1];
+  }
+
+  // The prestige level the current settings put you on: 2 only when every scaffold checkbox
+  // and key hints are all off, otherwise 1. `scaffolds` is progress.scaffolds.
+  function levelFor(scaffolds, hintsOn) {
+    const allOff = Object.keys(defaultScaffolds()).every((stage) => !scaffolds[stage]);
+    return allOff && !hintsOn ? 2 : 1;
   }
 
   function lengthWeight(length) {
@@ -114,7 +124,33 @@
       totalTyped: 0,
       scaffolds: defaultScaffolds(),
       scaffoldMarks: {},
+      level: 1,
+      // The saved progress of every level you are not on right now (level -> the fields in
+      // LEVEL_FIELDS), so going up a level starts fresh and coming back restores it.
+      stash: {},
     };
+  }
+
+  // The per-level fields of a progress object. Everything else (scaffold checkboxes,
+  // totalTyped) is shared across levels.
+  const LEVEL_FIELDS = ['unlocked', 'keys', 'words', 'lessonHistory', 'scaffoldMarks'];
+
+  function pickLevelFields(progress) {
+    const slice = {};
+    for (const field of LEVEL_FIELDS) slice[field] = progress[field];
+    return slice;
+  }
+
+  // Moves to prestige `level`: the current level's progress is set aside and the target
+  // level's is loaded (a brand new start if it has none yet). Returns true if it changed.
+  function switchLevel(progress, level) {
+    if (!LEVEL_WPM[level] || progress.level === level) return false;
+    progress.stash[progress.level] = pickLevelFields(progress);
+    const next = progress.stash[level] || pickLevelFields(emptyProgress());
+    delete progress.stash[level];
+    Object.assign(progress, next);
+    progress.level = level;
+    return true;
   }
 
   // Keeps only the fields the engine understands, so an old or damaged save still loads.
@@ -171,6 +207,14 @@
     }
     if (Number.isFinite(saved.totalTyped)) {
       progress.totalTyped = Math.max(0, Math.floor(saved.totalTyped));
+    }
+    if (Number.isInteger(saved.level) && LEVEL_WPM[saved.level]) progress.level = saved.level;
+    if (saved.stash && typeof saved.stash === 'object') {
+      for (const level of Object.keys(LEVEL_WPM)) {
+        const entry = saved.stash[level];
+        if (Number(level) === progress.level || !entry || typeof entry !== 'object') continue;
+        progress.stash[level] = pickLevelFields(normalize(entry));
+      }
     }
     return progress;
   }
@@ -255,7 +299,7 @@
     if (progress.unlocked >= KEY_ORDER.length) return false;
     const stats = windowStats(progress);
     return stats.count >= LESSON_SIZE
-      && stats.wpm >= wpmTarget(progress.unlocked)
+      && stats.wpm >= wpmTarget(progress.level)
       && stats.accuracy >= ACCURACY_TARGET
       && keysAccurateEnough(progress);
   }
@@ -329,17 +373,10 @@
     return Math.min(...names.map((name) => masteryTier(progress, name)));
   }
 
-  // The tier each scaffold stage needs scaffoldTier to reach before it defaults to fading.
-  const SCAFFOLD_STAGE_TIER = { labels: 1, target: 2, keyboard: 2 };
-
-  // Whether a given scaffold (one of SCAFFOLD_STAGE_TIER's keys) should be shown. `override`
-  // is the matching checkbox's own checked state, and always wins outright: a scaffold is
-  // only ever defaulted away, never removed with no way back. This is the one function both
-  // the fade decision and its override live in, so the override behaviour itself is covered
-  // by a plain unit test rather than only living, unverified, inside app.js's DOM code.
+  // Whether a scaffold should be shown: exactly its checkbox. Unchecking hides it right away;
+  // there is no waiting on mastery. (`progress` and `stage` stay in the signature for callers.)
   function scaffoldVisible(progress, stage, override) {
-    if (override) return true;
-    return scaffoldTier(progress) < SCAFFOLD_STAGE_TIER[stage];
+    return Boolean(override);
   }
 
   // Snapshots every unlocked key's current samples/misses as the redo baseline for `stage`.
@@ -685,7 +722,6 @@
     keyAccuracy,
     canUnlock,
     wpmTarget,
-    WPM_TARGET,
     confidence,
     keyWeakness,
     weaknessBoost,
@@ -709,5 +745,9 @@
     nextWords,
     startLesson,
     isRewind,
+    LEVEL_WPM,
+    MAX_LEVEL,
+    levelFor,
+    switchLevel,
   };
 });

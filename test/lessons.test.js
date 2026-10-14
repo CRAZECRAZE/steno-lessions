@@ -54,10 +54,9 @@ test('a miss slows a key down rather than counting as a sample', () => {
   assert.ok(progress.keys['T-'].ewmaMs > 500);
 });
 
-test('the words-per-minute target is a flat bar regardless of how many keys are unlocked', () => {
-  assert.equal(lessons.wpmTarget(lessons.START_KEYS), lessons.WPM_TARGET);
-  assert.equal(lessons.wpmTarget(lessons.START_KEYS + 5), lessons.WPM_TARGET);
-  assert.equal(lessons.wpmTarget(lessons.KEY_ORDER.length), lessons.WPM_TARGET);
+test('the words-per-minute target is 28 on level 1 and 38 on level 2', () => {
+  assert.equal(lessons.wpmTarget(1), 28);
+  assert.equal(lessons.wpmTarget(2), 38);
 });
 
 test('windowStats reports words per minute and accuracy over the newest words', () => {
@@ -383,24 +382,57 @@ test('a handful of reps on a freshly unlocked key reads as 0, even surrounded by
   assert.equal(lessons.scaffoldTier(progress), 0);
 });
 
-test('scaffoldVisible always honors the override, regardless of mastery tier', () => {
-  const mastered = lessons.emptyProgress();
-  for (const name of lessons.unlockedNames(mastered)) {
-    for (let i = 0; i < 30; i++) lessons.recordChord(mastered, [name], 400, true);
-  }
-  assert.equal(lessons.scaffoldTier(mastered), 2);
-  // Fully mastered, override off: auto-fade takes over for every stage.
-  assert.equal(lessons.scaffoldVisible(mastered, 'labels', false), false);
-  assert.equal(lessons.scaffoldVisible(mastered, 'target', false), false);
-  assert.equal(lessons.scaffoldVisible(mastered, 'keyboard', false), false);
-  // Override on: always visible, no matter how mastered the keys are.
-  assert.equal(lessons.scaffoldVisible(mastered, 'labels', true), true);
-  assert.equal(lessons.scaffoldVisible(mastered, 'target', true), true);
-  assert.equal(lessons.scaffoldVisible(mastered, 'keyboard', true), true);
-  // Fresh progress, override off: nothing is sustained yet, so everything stays visible.
+test('scaffoldVisible is exactly the checkbox, with no waiting on mastery', () => {
   const fresh = lessons.emptyProgress();
-  assert.equal(lessons.scaffoldVisible(fresh, 'labels', false), true);
-  assert.equal(lessons.scaffoldVisible(fresh, 'keyboard', false), true);
+  assert.equal(lessons.scaffoldVisible(fresh, 'labels', false), false);
+  assert.equal(lessons.scaffoldVisible(fresh, 'keyboard', false), false);
+  assert.equal(lessons.scaffoldVisible(fresh, 'target', true), true);
+});
+
+test('levelFor is 2 only with every scaffold and key hints off', () => {
+  const off = { labels: false, target: false, keyboard: false };
+  assert.equal(lessons.levelFor(off, false), 2);
+  assert.equal(lessons.levelFor(off, true), 1);
+  assert.equal(lessons.levelFor({ ...off, keyboard: true }, false), 1);
+});
+
+test('switchLevel starts the new level fresh and restores the old one when you return', () => {
+  const progress = lessons.emptyProgress();
+  progress.unlocked = 12;
+  lessons.recordChord(progress, ['T-'], 400, true);
+  assert.equal(lessons.switchLevel(progress, 2), true);
+  assert.equal(progress.level, 2);
+  assert.equal(progress.unlocked, lessons.START_KEYS);
+  assert.deepEqual(progress.keys, {});
+  progress.unlocked = 8;
+  assert.equal(lessons.switchLevel(progress, 2), false, 'already there');
+  assert.equal(lessons.switchLevel(progress, 1), true);
+  assert.equal(progress.unlocked, 12);
+  assert.equal(progress.keys['T-'].samples, 1);
+  assert.equal(lessons.switchLevel(progress, 2), true);
+  assert.equal(progress.unlocked, 8, 'level 2 progress was kept too');
+});
+
+test('level and the other level\'s stash survive normalize', () => {
+  const progress = lessons.emptyProgress();
+  progress.unlocked = 15;
+  lessons.switchLevel(progress, 2);
+  const back = lessons.normalize(JSON.parse(JSON.stringify(progress)));
+  assert.equal(back.level, 2);
+  assert.equal(back.stash[1].unlocked, 15);
+  assert.equal(lessons.normalize({ level: 9 }).level, 1);
+});
+
+test('unlocking at level 2 needs 38 wpm', () => {
+  const progress = lessons.emptyProgress();
+  progress.level = 2;
+  for (const name of lessons.unlockedNames(progress)) {
+    for (let i = 0; i < 10; i++) lessons.recordChord(progress, [name], 400, true);
+  }
+  for (let i = 0; i < lessons.LESSON_SIZE; i++) lessons.recordWord(progress, { ms: 1800, strokes: 1, misses: 0 }); // ~33 wpm
+  assert.equal(lessons.canUnlock(progress), false);
+  progress.level = 1;
+  assert.equal(lessons.canUnlock(progress), true);
 });
 
 test('scaffolds default to on for a fresh profile and for an old save that predates the field', () => {

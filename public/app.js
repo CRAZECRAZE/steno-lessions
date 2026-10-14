@@ -86,6 +86,26 @@
     }
   }
 
+  // Puts progress on the prestige level the checkboxes and key hints call for. Going up starts
+  // that level fresh and sets the other level's keys aside; ticking a box again brings them
+  // back. Returns true if the level changed (so the word queue needs rebuilding).
+  function syncLevel() {
+    const target = L.levelFor(state.progress.scaffolds, state.hints);
+    if (!L.switchLevel(state.progress, target)) return false;
+    state.recent = [];
+    state.queue = [];
+    refillQueue();
+    refillGhostWords();
+    startWord();
+    setFeedback(
+      target === 1
+        ? `Back on level 1 (${L.wpmTarget(1)} wpm). Your keys are restored.`
+        : `Level ${target}: scaffolds off, ${L.wpmTarget(target)} wpm. Keys start over; tick a box to go back.`,
+      'good',
+    );
+    return true;
+  }
+
   function allScaffoldsOff() {
     return SCAFFOLD_BOXES.every(([flag]) => !state.progress.scaffolds[flag]);
   }
@@ -549,7 +569,8 @@
     $('metrics').innerHTML =
       `<span>Speed: <strong>${wpm}wpm</strong>${deltaSpan(wpmDelta, (v) => `${v.toFixed(1)}wpm`)}</span>` +
       `<span>Accuracy: <strong>${accuracy.toFixed(2)}%</strong>${deltaSpan(accDelta, (v) => `${v.toFixed(2)}%`)}</span>` +
-      `<span>Score: <strong>${score.toLocaleString()}</strong>${deltaSpan(scoreDelta, (v) => v.toLocaleString())}</span>`;
+      `<span>Score: <strong>${score.toLocaleString()}</strong>${deltaSpan(scoreDelta, (v) => v.toLocaleString())}</span>` +
+      `<span>Level: <strong>${progress.level}</strong> <span class="muted">(${L.wpmTarget(progress.level)}wpm to unlock)</span></span>`;
     const sinceMilestone = progress.totalTyped % L.LESSON_SIZE;
     $('lesson-note').textContent = `Next break: ${sinceMilestone}/${L.LESSON_SIZE}`;
   }
@@ -747,7 +768,7 @@
     }
     const stats = L.windowStats(progress);
     const overallReady = stats.count >= L.LESSON_SIZE
-      && stats.wpm >= L.wpmTarget(progress.unlocked)
+      && stats.wpm >= L.wpmTarget(progress.level)
       && stats.accuracy >= L.ACCURACY_TARGET;
     const blocking = L.unlockedNames(progress).filter((name) => L.keyAccuracy(progress, name) < L.KEY_ACCURACY_TARGET);
     if (overallReady && blocking.length > 0) {
@@ -937,7 +958,7 @@
       const sound = state.slotByName.get(name)?.sound || '';
       const allKeys = state.progress.unlocked >= L.KEY_ORDER.length;
       setFeedback(
-        `Unlocked ${S.displayName(name)} (${sound}). Next: ${L.wpmTarget(state.progress.unlocked)} wpm.`,
+        `Unlocked ${S.displayName(name)} (${sound}). Next: ${L.wpmTarget(state.progress.level)} wpm.`,
         'good',
       );
       showUnlockToast(allKeys ? 'All Keys!' : `${S.displayName(name)} (${sound})`, allKeys);
@@ -1104,8 +1125,11 @@
         // Saving is only a convenience; the setting still applies for this visit
       }
       applyHints();
+      syncLevel();
+      saveProgress();
       refresh();
     });
+    L.switchLevel(state.progress, L.levelFor(state.progress.scaffolds, state.hints));
     ensureScaffoldMarks();
     applyScaffoldBoxes();
     for (const [flag, id] of SCAFFOLD_BOXES) {
@@ -1113,6 +1137,8 @@
         const wasAllOff = allScaffoldsOff();
         const turnedOff = state.progress.scaffolds[flag] && !event.target.checked;
         state.progress.scaffolds[flag] = event.target.checked;
+        // Before the redo marks below, so they land on the level you end up on.
+        syncLevel();
         // A fresh baseline every time it's turned off (not just the first time) - having
         // earned a scaffold-off badge once before doesn't let a later off period skip redoing
         // the mastery, since confidence never resets just because a box got checked again.
@@ -1149,6 +1175,7 @@
       state.progress = incoming;
       state.recent = [];
       state.queue = [];
+      L.switchLevel(state.progress, L.levelFor(state.progress.scaffolds, state.hints));
       ensureScaffoldMarks();
       applyScaffoldBoxes();
       refillQueue();
