@@ -1209,10 +1209,32 @@
   // Export: one click copies the whole progress object to the clipboard. Import: the box
   // looks like a normal text field, but every key is swallowed except paste, and a paste is
   // applied immediately (no separate submit step, as if it had also pressed enter for you).
+  // The progress JSON is repetitive, so deflate + base64 shrinks it several times over. Imports
+  // still accept plain JSON, so older exports keep working.
+  const PACKED_PREFIX = 'SL1:';
+  async function pipeBytes(bytes, stream) {
+    const out = new Response(new Blob([bytes]).stream().pipeThrough(stream));
+    return new Uint8Array(await out.arrayBuffer());
+  }
+  async function packProgress(progress) {
+    const bytes = await pipeBytes(new TextEncoder().encode(JSON.stringify(progress)), new CompressionStream('deflate-raw'));
+    let binary = '';
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return PACKED_PREFIX + btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  async function unpackProgress(text) {
+    const trimmed = text.trim();
+    if (!trimmed.startsWith(PACKED_PREFIX)) return JSON.parse(trimmed);
+    const b64 = trimmed.slice(PACKED_PREFIX.length).replace(/-/g, '+').replace(/_/g, '/');
+    const binary = atob(b64);
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(await pipeBytes(bytes, new DecompressionStream('deflate-raw'))));
+  }
+
   function setupTransfer() {
     $('export-progress').addEventListener('click', async () => {
       try {
-        await navigator.clipboard.writeText(JSON.stringify(state.progress));
+        await navigator.clipboard.writeText(await packProgress(state.progress));
         setFeedback('Progress copied to clipboard.', 'good');
       } catch (error) {
         setFeedback(`Could not copy progress: ${error.message}`, 'bad');
@@ -1239,14 +1261,14 @@
       const isPaste = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v';
       if (!isPaste) event.preventDefault();
     });
-    importBox.addEventListener('paste', (event) => {
+    importBox.addEventListener('paste', async (event) => {
       event.preventDefault();
       event.stopPropagation();
       const text = event.clipboardData.getData('text');
       importBox.value = '';
       let incoming;
       try {
-        incoming = L.normalize(JSON.parse(text));
+        incoming = L.normalize(await unpackProgress(text));
       } catch (error) {
         setFeedback(`Could not import progress: ${error.message}`, 'bad');
         return;

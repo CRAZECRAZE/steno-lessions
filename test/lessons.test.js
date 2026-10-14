@@ -602,3 +602,24 @@ test('all three levels keep separate progress through any order of switching and
     assert.equal(progress.keys['T-'].samples, 1, `level ${level} stats`);
   }
 });
+
+test('pickWords requireMask only returns words that use a masked key', () => {
+  const progress = lessons.emptyProgress();
+  progress.unlocked = 6;
+  const picked = lessons.pickWords(words, progress, slotIndex, { count: 5, requireMask: 1 << slotIndex.get('-T') });
+  assert.ok(picked.length > 0);
+  for (const word of picked) assert.ok(['cat', 'at'].includes(word.text), word.text);
+});
+
+test('nextWord drills a key stuck below the accuracy bar', () => {
+  const progress = lessons.emptyProgress();
+  progress.unlocked = 6;
+  for (const name of lessons.KEY_ORDER.slice(0, 6)) {
+    for (let i = 0; i < 40; i++) lessons.recordChord(progress, [name], 300, name === '-T' ? i % 3 !== 0 : true);
+  }
+  let hits = 0;
+  for (let i = 0; i < 200; i++) {
+    if (['cat', 'at'].includes(lessons.nextWord(words, progress, slotIndex).text)) hits++;
+  }
+  assert.ok(hits >= 100, `drilled ${hits}/200`);
+});

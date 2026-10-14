@@ -40,6 +40,10 @@
   // play (about one lesson's worth) instead of a lifetime total that's nearly impossible to
   // move once a key has thousands of samples.
   const KEY_ACCURACY_WINDOW = 30;
+  // Keys under this recent accuracy get a reserved share of words that contain them, so a key
+  // stuck below KEY_ACCURACY_TARGET still gets the reps it needs to climb out.
+  const DRILL_ACCURACY = 0.88;
+  const DRILL_SHARE = 0.5;
   // Attempts needed on a key before its rolling accuracy can gate an unlock.
   const KEY_ACCURACY_MIN_SAMPLES = 5;
   // The etude<->concerto complexity slider, 0-100. Below ETUDE_MAX: isolated, minimal-load
@@ -610,7 +614,9 @@
     for (const word of words) {
       if (word.text.length > maxLength) continue;
       const usable = usableVariants(word, eligibilityMask);
-      if (usable.length > 0) eligible.push({ word, usable });
+      if (usable.length === 0) continue;
+      if (options.requireMask && !usable.some((variant) => variant.some((b) => b & options.requireMask))) continue;
+      eligible.push({ word, usable });
     }
     if (eligible.length === 0) return [];
 
@@ -699,6 +705,20 @@
     return { band, focus, pickOptions };
   }
 
+  // Bitmask of unlocked keys whose recent accuracy sits under DRILL_ACCURACY. Rare keys (-Z, #,
+  // -D) show up in few words, so left to the weighted pick alone they never get enough reps to
+  // lift their accuracy past the unlock bar; this mask feeds a reserved share of drill words.
+  function weakMask(progress, slotIndex) {
+    let mask = 0;
+    for (const name of unlockedNames(progress)) {
+      const stat = progress.keys[name];
+      if (stat && stat.recent.length >= KEY_ACCURACY_MIN_SAMPLES && keyAccuracy(progress, name) < DRILL_ACCURACY) {
+        mask |= 1 << slotIndex.get(name);
+      }
+    }
+    return mask;
+  }
+
   // One word, chosen for the live complexity band: 'etude' (isolated, minimal-load reps on
   // the focus key), 'study' (today's normal picking, unchanged), or 'concerto' (full-length
   // words that deliberately recombine several recently-unlocked keys). The band is read from
@@ -709,7 +729,12 @@
   // not actually being held back by word complexity.
   function nextWord(words, progress, slotIndex, options = {}) {
     const { band, focus, pickOptions } = bandPickOptions(progress, slotIndex, options);
-    let picked = pickWords(words, progress, slotIndex, { ...pickOptions, count: 1 })[0];
+    let picked;
+    const drill = options.forceBand ? 0 : weakMask(progress, slotIndex);
+    if (drill && (options.random || Math.random)() < DRILL_SHARE) {
+      picked = pickWords(words, progress, slotIndex, { ...options, requireMask: drill, count: 1 })[0];
+    }
+    if (!picked) picked = pickWords(words, progress, slotIndex, { ...pickOptions, count: 1 })[0];
     // An etude restriction (or any band option) can legitimately leave nothing eligible early
     // on, when few keys are mastered yet - fall back to a plain pick rather than return nothing.
     if (!picked) picked = pickWords(words, progress, slotIndex, { ...options, count: 1 })[0];
@@ -724,7 +749,17 @@
   // (the band, the mask, `progress` itself) changes between them.
   function nextWords(words, progress, slotIndex, count, options = {}) {
     const { band, focus, pickOptions } = bandPickOptions(progress, slotIndex, options);
-    const picked = pickWords(words, progress, slotIndex, { ...pickOptions, count });
+    const drill = options.forceBand ? 0 : weakMask(progress, slotIndex);
+    const drillCount = drill ? Math.round(count * DRILL_SHARE) : 0;
+    const picked = drillCount
+      ? pickWords(words, progress, slotIndex, { ...options, requireMask: drill, count: drillCount })
+      : [];
+    const normal = pickWords(words, progress, slotIndex, {
+      ...pickOptions,
+      avoid: [...(options.avoid || []), ...picked.map((word) => word.text)],
+      count: count - picked.length,
+    });
+    picked.push(...normal);
     // Same fallback as `nextWord`, applied to whatever's still missing after the band-
     // restricted pass, rather than one plain pick per missing word.
     if (picked.length < count) {
