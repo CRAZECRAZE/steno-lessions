@@ -667,13 +667,13 @@
     if (!stat || stat.ewmaMs === null || stat.samples < 5) {
       return `${header}<div class="kt-row muted">Not calibrated yet - needs more reps.</div>`;
     }
-    const wpmLike = Math.round(60000 / stat.ewmaMs);
+    const chordMs = Math.round(stat.ewmaMs);
     const accuracy = Math.round(L.keyAccuracy(progress, name) * 100);
     const confidence = Math.round(L.confidence(progress, name) * 100);
     const tierLabel = ['Learning', 'Solid', 'Mastered'][L.masteryTier(progress, name)];
     return `${header}` +
       `<div class="kt-row"><span>Accuracy</span><span>${accuracy}%</span></div>` +
-      `<div class="kt-row"><span>Speed</span><span>${wpmLike} wpm</span></div>` +
+      `<div class="kt-row"><span>Chord time</span><span>${chordMs} ms</span></div>` +
       `<div class="kt-row"><span>Confidence</span><span>${confidence}% (${tierLabel})</span></div>`;
   }
 
@@ -772,10 +772,10 @@
       el.innerHTML = `${label} <span class="muted">Not calibrated, need more samples.</span>`;
       return;
     }
-    const wpmLike = Math.round(60000 / stat.ewmaMs);
+    const chordMs = Math.round(stat.ewmaMs);
     const accuracy = Math.round(L.keyAccuracy(progress, name) * 100);
     el.innerHTML =
-      `${label} <span class="muted">${wpmLike}wpm, ${accuracy}% accuracy${slot ? ` (${escapeHtml(slot.sound)})` : ''}.</span>`;
+      `${label} <span class="muted">${chordMs}ms per chord, ${accuracy}% accuracy${slot ? ` (${escapeHtml(slot.sound)})` : ''}.</span>`;
   }
 
   // The last 10 finished lessons, as two rows (Speed above Accuracy) in a grid, one column
