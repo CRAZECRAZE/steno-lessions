@@ -347,7 +347,13 @@
   // unlock. Merely unlocking the last key does not count. Once earned it stays earned.
   function completeIfReady(progress) {
     if (progress.completed[progress.level]) return false;
-    if (progress.unlocked < KEY_ORDER.length || !meetsTargets(progress)) return false;
+    if (progress.unlocked < KEY_ORDER.length) return false;
+    // The per-key bar is for unlocking keys. Rare keys fill their rolling window slowly, so a
+    // fresh lesson that clears speed and accuracy is proof enough to finish the level.
+    const stats = windowStats(progress);
+    if (stats.count < LESSON_SIZE || stats.wpm < wpmTarget(progress.level) || stats.accuracy < ACCURACY_TARGET) {
+      return false;
+    }
     progress.completed[progress.level] = true;
     return true;
   }

@@ -938,7 +938,9 @@
       // Accuracy is forgiving per word: however many wrong attempts a word takes, it counts
       // as one inaccuracy for the word, not one per attempt.
       state.wordMisses = 1;
-      L.recordChord(state.progress, S.namesInBits(target), ms, false);
+      // Blame only the keys that were wrong (missed or extra), not the whole stroke, so one
+      // slip on a key doesn't also count against the keys pressed correctly beside it.
+      L.recordChord(state.progress, S.namesInBits((target ^ chord) & target || target), ms, false);
       // Only the latest mistake is ever shown or undoable - repeating the same wrong chord,
       // or making a different one, replaces it rather than piling on top of it. DRILL_REPEATS
       // only ever asks for "1 more right in a row" regardless of how many tries it took to get
