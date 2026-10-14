@@ -81,19 +81,20 @@
   // accuracy gating (KEY_ACCURACY_TARGET) is what actually proves a new key is mastered,
   // so a rising speed target on top of that only punished the lesson right after a brand
   // new, still-unfamiliar key was introduced.
-  // Per prestige level: 1 is learning every key with any scaffold still on, 2 is the same with
-  // every scaffold off (see levelFor), which asks for more speed.
-  const LEVEL_WPM = { 1: 28, 2: 38 };
-  const MAX_LEVEL = 2;
+  // Per prestige level. 1: any visual aid (keyboard diagram or key hints) may be on.
+  // 2: no diagram or hints, but a stroke helper (stroke labels or target highlight) may be on.
+  // 3: every helper off, typing from the word alone.
+  const LEVEL_WPM = { 1: 28, 2: 38, 3: 50 };
+  const MAX_LEVEL = 3;
   function wpmTarget(level = 1) {
     return LEVEL_WPM[level] || LEVEL_WPM[1];
   }
 
-  // The prestige level the current settings put you on: 2 only when every scaffold checkbox
-  // and key hints are all off, otherwise 1. `scaffolds` is progress.scaffolds.
+  // The prestige level the current settings put you on. `scaffolds` is progress.scaffolds.
   function levelFor(scaffolds, hintsOn) {
-    const allOff = Object.keys(defaultScaffolds()).every((stage) => !scaffolds[stage]);
-    return allOff && !hintsOn ? 2 : 1;
+    if (scaffolds.keyboard || hintsOn) return 1;
+    if (scaffolds.labels || scaffolds.target) return 2;
+    return 3;
   }
 
   function lengthWeight(length) {

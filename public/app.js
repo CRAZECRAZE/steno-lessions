@@ -91,6 +91,7 @@
   // back. Returns true if the level changed (so the word queue needs rebuilding).
   function syncLevel() {
     const target = L.levelFor(state.progress.scaffolds, state.hints);
+    const previous = state.progress.level;
     if (!L.switchLevel(state.progress, target)) return false;
     state.recent = [];
     state.queue = [];
@@ -98,9 +99,9 @@
     refillGhostWords();
     startWord();
     setFeedback(
-      target === 1
-        ? `Back on level 1 (${L.wpmTarget(1)} wpm). Your keys are restored.`
-        : `Level ${target}: scaffolds off, ${L.wpmTarget(target)} wpm. Keys start over; tick a box to go back.`,
+      target < previous
+        ? `Back on level ${target} (${L.wpmTarget(target)} wpm). Your keys are restored.`
+        : `Level ${target} (${L.wpmTarget(target)} wpm). Keys start over; turn a helper back on to return.`,
       'good',
     );
     return true;

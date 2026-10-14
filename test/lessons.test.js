@@ -54,9 +54,10 @@ test('a miss slows a key down rather than counting as a sample', () => {
   assert.ok(progress.keys['T-'].ewmaMs > 500);
 });
 
-test('the words-per-minute target is 28 on level 1 and 38 on level 2', () => {
+test('the words-per-minute target is 28 / 38 / 50 on levels 1 / 2 / 3', () => {
   assert.equal(lessons.wpmTarget(1), 28);
   assert.equal(lessons.wpmTarget(2), 38);
+  assert.equal(lessons.wpmTarget(3), 50);
 });
 
 test('windowStats reports words per minute and accuracy over the newest words', () => {
@@ -389,11 +390,14 @@ test('scaffoldVisible is exactly the checkbox, with no waiting on mastery', () =
   assert.equal(lessons.scaffoldVisible(fresh, 'target', true), true);
 });
 
-test('levelFor is 2 only with every scaffold and key hints off', () => {
+test('levelFor: visual aids are 1, stroke helpers only are 2, nothing is 3', () => {
   const off = { labels: false, target: false, keyboard: false };
-  assert.equal(lessons.levelFor(off, false), 2);
+  assert.equal(lessons.levelFor(off, false), 3);
   assert.equal(lessons.levelFor(off, true), 1);
   assert.equal(lessons.levelFor({ ...off, keyboard: true }, false), 1);
+  assert.equal(lessons.levelFor({ ...off, labels: true }, false), 2);
+  assert.equal(lessons.levelFor({ ...off, target: true }, false), 2);
+  assert.equal(lessons.levelFor({ labels: true, target: true, keyboard: true }, false), 1);
 });
 
 test('switchLevel starts the new level fresh and restores the old one when you return', () => {
@@ -423,7 +427,7 @@ test('level and the other level\'s stash survive normalize', () => {
   assert.equal(lessons.normalize({ level: 9 }).level, 1);
 });
 
-test('unlocking at level 2 needs 38 wpm', () => {
+test('unlocking at level 2 needs 38 wpm, level 3 needs 50', () => {
   const progress = lessons.emptyProgress();
   progress.level = 2;
   for (const name of lessons.unlockedNames(progress)) {
