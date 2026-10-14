@@ -12,16 +12,18 @@
   const named = (label, code, width) => ({ label, code, width });
   // Several physical keys drawn as one: they all press the same steno key. `span` is how many
   // key widths it covers, `tall` makes it two rows high (it sits in the upper row and the row
-  // below leaves a `gap` where its lower half is), `display` is the letters shown on it.
-  const merged = (codes, display, { span, tall } = {}) => ({ label: display, codes, display, span, tall });
+  // below leaves a `gap` where its lower half is), `bar` is the slim number bar. `letters` are
+  // the key names shown on it; a tall key shows its sound and letter once per half, exactly
+  // where the two single keys would have them.
+  const merged = (codes, letters, { span, tall, bar } = {}) => ({ label: letters[0], codes, letters, span, tall, bar });
   const gap = { spacer: true };
   const NUMBER_CODES = [...'1234567890'].map((digit) => `Digit${digit}`);
   const ROWS = [
-    [sym('`', '~'), merged(NUMBER_CODES, '1 2 3 4 5 6 7 8 9 0', { span: 10 }), sym('-', '_'),
+    [sym('`', '~'), merged(NUMBER_CODES, [...'1234567890'], { span: 10, bar: true }), sym('-', '_'),
       sym('=', '+'), named('Backspace', 'Backspace', 'w2')],
     // Q and A are both S-, T and G are both *: one tall key each, spanning both rows
-    [named('Tab', 'Tab', 'w15'), merged(['KeyQ', 'KeyA'], 'Q A', { tall: true }),
-      ...'WER'.split('').map(letter), merged(['KeyT', 'KeyG'], 'T G', { tall: true }),
+    [named('Tab', 'Tab', 'w15'), merged(['KeyQ', 'KeyA'], ['Q', 'A'], { tall: true }),
+      ...'WER'.split('').map(letter), merged(['KeyT', 'KeyG'], ['T', 'G'], { tall: true }),
       ...'YUIOP'.split('').map(letter), sym('[', '{'), sym(']', '}'), sym('\\', '|', 'w15')],
     [named('Caps Lock', 'CapsLock', 'w15'), gap, ...'SDF'.split('').map(letter), gap,
       ...'HJKL'.split('').map(letter), sym(';', ':'), sym("'", '"'), named('Enter', 'Enter', 'w225')],
@@ -271,9 +273,10 @@
   function buildKeyboard() {
     const keyboard = $('keyboard');
     keyboard.textContent = '';
-    for (const keys of ROWS) {
+    ROWS.forEach((keys, rowIndex) => {
       const row = document.createElement('div');
-      row.className = 'kb-row';
+      // The number row is slim, so the wide # bar is a thin strip instead of a giant key
+      row.className = `kb-row${rowIndex === 0 ? ' slim' : ''}`;
       for (const key of keys) {
         if (key.spacer) {
           // Where the lower half of a tall key above sits; nothing to draw
@@ -289,20 +292,39 @@
         el.dataset.code = code;
         if (key.width) el.classList.add(key.width);
         if (key.tall) el.classList.add('tall');
+        if (key.bar) el.classList.add('bar');
         if (key.span) el.style.width = `calc(var(--u) * ${key.span} + var(--gap) * ${key.span - 1})`;
         if (fingerByCode.has(code)) el.dataset.finger = fingerByCode.get(code);
         if (HOME_ROW.has(code)) el.classList.add('home');
         const info = state.infoByCode.get(code);
         if (info) {
           // Steno keys show the sound big, and the letter small in the corner
-          const letterEl = document.createElement('span');
-          letterEl.className = 'letter';
-          letterEl.textContent = key.display || info.label;
-          el.appendChild(letterEl);
-          const main = document.createElement('span');
-          main.className = 'main sound';
-          main.textContent = info.sound.replace(/ \+ /g, '+');
-          el.appendChild(main);
+          const addSound = (lower) => {
+            const main = document.createElement('span');
+            main.className = `main sound${lower ? ' lower' : ''}`;
+            main.textContent = info.sound.replace(/ \+ /g, '+');
+            el.appendChild(main);
+          };
+          if (key.bar) {
+            // One # for the whole bar, with each digit small at its own key's column
+            const digits = document.createElement('span');
+            digits.className = 'digits';
+            for (const digit of key.letters) {
+              const cell = document.createElement('span');
+              cell.textContent = digit;
+              digits.appendChild(cell);
+            }
+            el.appendChild(digits);
+            addSound(false);
+          } else {
+            (key.letters || [info.label]).forEach((text, half) => {
+              const letterEl = document.createElement('span');
+              letterEl.className = `letter${half ? ' lower' : ''}`;
+              letterEl.textContent = text;
+              el.appendChild(letterEl);
+              addSound(half > 0);
+            });
+          }
         } else {
           if (key.shift) {
             const shift = document.createElement('span');
@@ -319,7 +341,7 @@
         row.appendChild(el);
       }
       keyboard.appendChild(row);
-    }
+    });
   }
 
   // Prestige scaffold fading: least-consequential first. Each stage only ever changes a

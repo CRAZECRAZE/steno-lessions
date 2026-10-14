@@ -443,6 +443,7 @@ body.paused #practice .feedback {
 
 /* Key hints off: no key names on the keyboard, no keys row, no target highlight */
 .hints-off .key .letter,
+.hints-off .key .digits,
 .hints-off .keyname,
 .hints-off .kc { display: none; }
 
@@ -522,7 +523,33 @@ body.paused #practice .feedback {
   z-index: 1;
 }
 .key.spacer { visibility: hidden; }
-.key.tall.steno .main.sound { top: 50%; transform: translateY(-50%); }
+/* A tall key repeats its sound and letter for the lower half, where the lower single key had
+   them, and moves the upper half's letter up to where the upper single key had it. */
+.key.tall .main.sound.lower { top: calc(var(--kh) + var(--gap) + 6px); }
+.key.tall .letter { bottom: calc(var(--kh) + var(--gap) + 4px); }
+.key.tall .letter.lower { bottom: 4px; }
+
+/* The number row is slim, and the # key across it is a thin bar with each digit small at its
+   own column, so it lines up with the keys below instead of being a giant block. */
+.kb-row.slim .key { height: 30px; }
+.kb-row.slim .key .shift { font-size: 8px; top: 2px; left: 4px; }
+.kb-row.slim .key .main { font-size: 13px; }
+.key.bar.steno .main.sound { top: 3px; font-size: 14px; }
+.key.bar .digits {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2px;
+  display: grid;
+  grid-template-columns: repeat(10, var(--u));
+  column-gap: var(--gap);
+  justify-content: center;
+  font-family: var(--key-font);
+  font-size: 10px;
+  line-height: 1;
+  text-align: center;
+  opacity: 0.7;
+}
 
 .key .shift {
   position: absolute;
