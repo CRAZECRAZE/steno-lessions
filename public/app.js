@@ -102,11 +102,8 @@
     const target = L.levelFor(state.progress.scaffolds, state.hints);
     const previous = state.progress.level;
     if (!L.switchLevel(state.progress, target)) return false;
-    state.recent = [];
-    state.queue = [];
-    refillQueue();
-    refillGhostWords();
-    startWord();
+    // The words already on screen (current word, queue, ghosts) stay exactly as they are; the
+    // new level only shapes the words generated after them.
     setFeedback(
       target < previous
         ? `Back on level ${target} (${L.wpmTarget(target)} wpm). Your keys are restored.`
@@ -150,6 +147,7 @@
     lastChordEnd: null,
     failures: [], // wrong attempts still being drilled - tracked for retry/undo, not displayed
     previewBits: 0, // the last stroke's chord, kept after release so the preview survives it
+    sinceBreak: 0, // words typed since the last break; session-only, so a reload restarts at 0/LESSON_SIZE
     onBreak: false, // true only during the blank pause right at a LESSON_SIZE milestone
     justResumed: false, // one-shot: true for the single render right after a break, so the
     // first word(s) of the next stretch get the slow entrance animation instead of just appearing
@@ -373,7 +371,7 @@
   // clean multiple), that's a full LESSON_SIZE away again, not zero - the zero-ahead moment
   // is handled separately, by state.onBreak, not by this running purely off totalTyped.
   function wordsUntilBreak() {
-    const pos = state.progress.totalTyped % L.LESSON_SIZE;
+    const pos = state.sinceBreak;
     return pos === 0 ? L.LESSON_SIZE : L.LESSON_SIZE - pos;
   }
   // The queue winds down to nothing right as a break approaches (so the stream visibly tapers
@@ -601,8 +599,7 @@
       `<span>Accuracy: <strong>${accuracy.toFixed(2)}%</strong>${deltaSpan(accDelta, (v) => `${v.toFixed(2)}%`)}</span>` +
       `<span>Score: <strong>${score.toLocaleString()}</strong>${deltaSpan(scoreDelta, (v) => v.toLocaleString())}</span>` +
       `<span>Level: <strong>${progress.level}</strong> <span class="muted">(${L.wpmTarget(progress.level)}wpm to unlock)</span></span>`;
-    const sinceMilestone = progress.totalTyped % L.LESSON_SIZE;
-    $('lesson-note').textContent = `Next break: ${sinceMilestone}/${L.LESSON_SIZE}`;
+    $('lesson-note').textContent = `Next break: ${state.sinceBreak}/${L.LESSON_SIZE}`;
   }
 
   // A single shared tooltip for the key chips, replacing the native `title` attribute - native
@@ -1028,7 +1025,9 @@
     // already tapered itself down to nothing right on this word (targetQueueDepth), so the
     // stream is already blank below; this just holds it blank for a beat, then lets the next
     // stretch's first word(s) fade in, instead of refilling instantly.
-    if (state.progress.totalTyped % L.LESSON_SIZE === 0) {
+    state.sinceBreak += 1;
+    if (state.sinceBreak >= L.LESSON_SIZE) {
+      state.sinceBreak = 0;
       state.lastLessonStats = L.windowStats(state.progress);
       L.recordLesson(state.progress, state.lastLessonStats);
       state.onBreak = true;
@@ -1247,6 +1246,7 @@
       state.progress = incoming;
       state.recent = [];
       state.queue = [];
+      state.sinceBreak = 0;
       L.switchLevel(state.progress, L.levelFor(state.progress.scaffolds, state.hints));
       applyScaffoldBoxes();
       refillQueue();
