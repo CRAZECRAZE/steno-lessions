@@ -490,32 +490,18 @@
         const held = state.pressed.size > 0 ? state.chordBits : state.previewBits;
         // Strokes of this word already typed right stay put, in order, ahead of the stroke
         // being held (TKAT then A reads "dat" and keeps "dat" once TKAT is let go).
-        const parts = state.doneStrokes.map((bits) => state.strokeWord.get(bits) || S.renderStroke(bits));
-        let resolved = parts.length > 0;
-        if (held) {
-          // Only a stroke that finishes the word shows the word. A first stroke of a multi-stroke
-          // variant (TKAT of TKAT/...) is shown as what that stroke alone translates to ("dat"),
-          // otherwise the preview claims "data" and then changes on release.
-          const known = state.strokeWord.get(held);
-          const finishes = state.candidates.some((seq) => seq[state.strokeIdx] === held && state.strokeIdx === seq.length - 1);
-          const continues = finishes || (!known && state.candidates.some((seq) => seq[state.strokeIdx] === held));
-          if (continues && parts.length === 0) {
-            parts.push(word.text);
-            resolved = true;
-          } else if (continues) {
-            parts.length = 0;
-            parts.push(word.text);
-          } else if (known) {
-            parts.push(known);
-            resolved = true;
-          } else {
-            parts.push(S.renderStroke(held));
-            resolved = false;
-          }
-        }
-        if (parts.length) {
-          preview.classList.add(resolved ? 'resolved' : 'unresolved');
-          preview.textContent = parts.join(' ');
+        const shown = L.previewFor({
+          word,
+          done: state.doneStrokes,
+          held,
+          candidates: state.candidates,
+          strokeIdx: state.strokeIdx,
+          strokeWord: state.strokeWord,
+          render: S.renderStroke,
+        });
+        if (shown) {
+          preview.classList.add(shown.resolved ? 'resolved' : 'unresolved');
+          preview.textContent = shown.text;
         }
       }
       cell.appendChild(preview);

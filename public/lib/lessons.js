@@ -534,6 +534,28 @@
 
   // The stroke sequences to show for a word, using only unlocked keys. The first one is the
   // stroke to type: fewest strokes, then fewest keys.
+  // What the faint preview above the current word shows. `done` are the strokes of this word
+  // already typed right (they stay visible, in order), `held` is the stroke being held or just
+  // let go (0 for none), `candidates` the spellings still possible and `strokeIdx` the stroke
+  // being typed. A held stroke that finishes the word shows the word itself; any other (the
+  // first or middle stroke of a longer spelling, or a wrong stroke) shows what it translates to
+  // on its own, or its raw steno when that is unknown. `render` turns stroke bits into steno
+  // text. Returns null when there is nothing to show, else { text, resolved } where resolved
+  // is false if any part had to fall back to raw steno.
+  function previewFor({ word, done, held, candidates, strokeIdx, strokeWord, render }) {
+    const parts = done.map((bits) => strokeWord.get(bits) || null);
+    const texts = done.map((bits, i) => parts[i] || render(bits));
+    if (held) {
+      const finishes = candidates.some((seq) => seq[strokeIdx] === held && strokeIdx === seq.length - 1);
+      if (finishes) return { text: word.text, resolved: true };
+      const known = strokeWord.get(held) || null;
+      parts.push(known);
+      texts.push(known || render(held));
+    }
+    if (texts.length === 0) return null;
+    return { text: texts.join(' '), resolved: parts.every(Boolean) };
+  }
+
   function displayVariants(word, mask) {
     const keyCount = (strokes) => strokes.reduce((total, bits) => total + bitCount(bits), 0);
     return usableVariants(word, mask)
@@ -848,6 +870,7 @@
     unlockedMask,
     usableVariants,
     displayVariants,
+    previewFor,
     pickWords,
     nextWord,
     nextWords,
