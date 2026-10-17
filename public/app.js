@@ -466,7 +466,7 @@
       const isCurrent = !isGhost && i === 0;
       const strokes = isCurrent ? shownStrokes() : L.displayVariants(word, mask)[0] || [];
       const cell = document.createElement('div');
-      cell.className = `cell${isCurrent ? ' current' : ''}${word.isProbe ? ' probe' : ''}` +
+      cell.className = `cell${isCurrent ? ' current' : ''}` +
         `${entering && !isGhost ? ' entering' : ''}${isGhost ? ' ghost' : ''}`;
       if (isGhost) cell.setAttribute('aria-hidden', 'true');
       cell.style.gridTemplateColumns = `repeat(${Math.max(1, strokes.length)}, auto)`;

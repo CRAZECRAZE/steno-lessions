@@ -454,19 +454,6 @@ body.paused #practice .feedback {
 .scaffold-labels-off .cell .errors,
 .scaffold-labels-off .cell .kc { display: none; }
 
-/* A scheduled diagnostic probe word (lessons.js's kinematicGap): tagged subtly so an
-   unexpectedly easy word mid-concerto doesn't read as a mistake in the algorithm. */
-.cell.probe .w::after {
-  content: "";
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  margin-left: 4px;
-  border-radius: 50%;
-  background: var(--target);
-  vertical-align: super;
-}
-
 .keyboard-wrap { display: grid; gap: 10px; justify-items: center; }
 
 /* Most consequential scaffold - on by default. Off collapses it to an empty box (its rows
