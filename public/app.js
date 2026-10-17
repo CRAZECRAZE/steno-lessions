@@ -487,12 +487,16 @@
         // one starts replacing it, live, key by key.
         const held = state.pressed.size > 0 ? state.chordBits : state.previewBits;
         if (held) {
-          const continues = state.candidates.some((seq) => seq[state.strokeIdx] === held);
+          // Only a stroke that finishes the word shows the word. A first stroke of a multi-stroke
+          // variant (TKAT of TKAT/...) is shown as what that stroke alone translates to ("dat"),
+          // otherwise the preview claims "data" and then changes on release.
+          const known = state.strokeWord.get(held);
+          const finishes = state.candidates.some((seq) => seq[state.strokeIdx] === held && state.strokeIdx === seq.length - 1);
+          const continues = finishes || (!known && state.candidates.some((seq) => seq[state.strokeIdx] === held));
           if (continues) {
             preview.classList.add('resolved');
             preview.textContent = word.text;
           } else {
-            const known = state.strokeWord.get(held);
             if (known) {
               preview.classList.add('resolved');
               preview.textContent = known;
