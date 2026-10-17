@@ -345,13 +345,13 @@
   // Prestige scaffold fading: least-consequential first. Each stage only ever changes a
   // *default* - the matching checkbox (state.progress.scaffolds.{labels,target,keyboard}, on
   // by default) always wins, so nothing is ever taken away with no way to restore it.
+  const labelsSetting = () => L.scaffoldVisible(state.progress, 'labels', state.progress.scaffolds.labels);
+
   function renderKeyboard() {
     const target = currentStroke();
     const mask = unlockedMask();
     const scaffolds = state.progress.scaffolds;
-    // Temporary per-word reveal after repeated misses; never written to state.progress.scaffolds
-    const labelsOn = L.scaffoldVisible(state.progress, 'labels', scaffolds.labels)
-      || L.labelsRevealed(state.progress, state.wordWrongChords);
+    const labelsOn = labelsSetting();
     const targetOn = L.scaffoldVisible(state.progress, 'target', scaffolds.target);
     const keyboardOn = L.scaffoldVisible(state.progress, 'keyboard', scaffolds.keyboard);
     // Least-consequential scaffold: the sound/key-name text line under each word in the
@@ -471,6 +471,15 @@
         `${entering && !isGhost ? ' entering' : ''}${isGhost ? ' ghost' : ''}`;
       if (isGhost) cell.setAttribute('aria-hidden', 'true');
       cell.style.gridTemplateColumns = `repeat(${Math.max(1, strokes.length)}, auto)`;
+      // After repeated misses the labels hidden by the level appear for just this word, as a
+      // floating panel under it (.help-pop, out of the layout), so no cell moves or resizes.
+      const helpPop = isCurrent && !labelsSetting() && L.labelsRevealed(state.progress, state.wordWrongChords)
+        ? document.createElement('span') : null;
+      if (helpPop) {
+        helpPop.className = 'help-pop';
+        helpPop.style.gridTemplateColumns = cell.style.gridTemplateColumns;
+      }
+      const labelHost = helpPop || cell;
       const wordEl = document.createElement('span');
       wordEl.className = 'w';
       wordEl.textContent = word.text;
@@ -553,7 +562,7 @@
         keys.className = `kc ${status}`;
         keys.style.gridColumn = column + 1;
         keys.textContent = keysFor(bits).join(' ');
-        cell.append(sound, keys);
+        labelHost.append(sound, keys);
       });
       // Its own grid row below the strokes, between them and the keyhints row - empty and
       // taking no space until there's an actual mistake to show.
@@ -565,7 +574,8 @@
         ch.textContent = text;
         errors.appendChild(ch);
       }
-      cell.appendChild(errors);
+      labelHost.appendChild(errors);
+      if (helpPop) cell.appendChild(helpPop);
       if (isCurrent) current = cell;
       stream.appendChild(cell);
     }
