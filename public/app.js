@@ -192,7 +192,6 @@
   const shownStrokes = () => state.candidates[0] || [];
   const currentStroke = () => shownStrokes()[state.strokeIdx] || 0;
   const unlockedMask = () => L.unlockedMask(state.progress, state.slotIndex);
-  const namesOf = (bits) => S.namesInBits(bits).map(S.displayName).join(' ') || 'nothing';
   // The steno keys held right now, as a stroke mask
   const heldBits = () => [...state.pressed].reduce((bits, code) => bits | (state.infoByCode.get(code)?.bits || 0), 0);
 
@@ -499,7 +498,7 @@
           candidates: state.candidates,
           strokeIdx: state.strokeIdx,
           strokeWord: state.strokeWord,
-          render: S.renderStroke,
+          render: S.displayStroke,
         });
         if (shown) {
           preview.classList.add(shown.resolved ? 'resolved' : 'unresolved');
@@ -948,7 +947,7 @@
       // never more than one live mistake to track at once.
       state.failures = [chord];
       setFeedback(
-        `Needs ${S.renderStroke(target)} (${namesOf(target)}). You pressed ${namesOf(chord)}. ` +
+        `Needs ${S.displayStroke(target)}. You pressed ${S.displayStroke(chord)}. ` +
           `Press * (T key) to undo.`,
         'bad',
       );

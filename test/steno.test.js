@@ -127,3 +127,16 @@ test('renderStroke writes a stroke bitmask in Plover notation', () => {
     assert.equal(steno.renderStroke(steno.parseStroke(text)), text);
   }
 });
+
+test('displayStroke groups a stroke as beginning-vowel-end', () => {
+  const cases = {
+    'THAOETS': 'TH-AOE-TS', 'STR-RTS': 'STR-RTS', '-TS': '-TS', 'S': 'S', 'KAT': 'K-A-T',
+    'RARTS': 'R-A-RTS', 'O*PBS': 'O*-PBS', '*': '*', '#T': '#T', '#-T': '#-T', '#': '#',
+    'AEU': 'AEU', 'SKWR-FRPB': 'SKWR-FRPB',
+  };
+  for (const [plover, shown] of Object.entries(cases)) {
+    const bits = steno.parseStroke(plover);
+    assert.equal(steno.displayStroke(bits), shown, plover);
+    assert.equal(steno.parseStroke(steno.renderStroke(bits)), bits, 'renderStroke still round-trips');
+  }
+});
