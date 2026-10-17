@@ -1013,7 +1013,9 @@
     // Unlocking is judged continuously - windowStats is already a rolling slice of the
     // newest LESSON_SIZE words, so there is no "boundary" to wait for; checking after every
     // word just means it fires the instant the window actually clears its targets.
+    let toasted = false;
     if (L.unlockIfReady(state.progress)) {
+      toasted = true;
       const name = L.KEY_ORDER[state.progress.unlocked - 1];
       const sound = state.slotByName.get(name)?.sound || '';
       const allKeys = state.progress.unlocked >= L.KEY_ORDER.length;
@@ -1023,15 +1025,9 @@
       );
       showUnlockToast(allKeys ? 'All Keys!' : `${S.displayName(name)} (${sound})`, allKeys);
     } else if (L.completeIfReady(state.progress)) {
-      L.recordBestIfFaster(state.progress);
+      toasted = true;
       setFeedback(`Prestige ${state.progress.level} complete!`, 'good');
       showUnlockToast(`Prestige ${state.progress.level}`, true, 'Complete');
-    } else {
-      const best = L.recordBestIfFaster(state.progress);
-      if (best) {
-        setFeedback(`New prestige ${state.progress.level} best: ${best} wpm!`, 'good');
-        showUnlockToast(`${best} wpm`, true, `Prestige ${state.progress.level} PB`);
-      }
     }
 
     // Purely cosmetic break-reminder, every LESSON_SIZE words - a human milestone, not a
@@ -1044,6 +1040,13 @@
       state.sinceBreak = 0;
       state.lastLessonStats = L.windowStats(state.progress);
       L.recordLesson(state.progress, state.lastLessonStats);
+      // The PB is the whole finished lesson's speed. A level-complete or unlock toast on this
+      // same word wins; the record is still kept and shows in the star tooltip.
+      const best = L.recordBestIfFaster(state.progress, state.lastLessonStats);
+      if (best && !toasted) {
+        setFeedback(`New prestige ${state.progress.level} best: ${best} wpm!`, 'good');
+        showUnlockToast(`${best} wpm`, true, `Prestige ${state.progress.level} PB`);
+      }
       state.onBreak = true;
       startWord();
       saveProgress();

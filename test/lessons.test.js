@@ -636,26 +636,23 @@ test('nextWord does not repeat the word just typed when the key set is tiny', ()
   }
 });
 
-test('a prestige personal best is only kept while every key is unlocked, per level', () => {
+test('a prestige personal best is one whole lesson, kept only while every key is unlocked', () => {
   const progress = lessons.emptyProgress();
-  const type = (ms, misses = 0) => {
+  const lesson = (ms, misses = 0) => {
     for (let i = 0; i < lessons.LESSON_SIZE; i++) lessons.recordWord(progress, { ms, strokes: 1, misses });
+    return lessons.windowStats(progress);
   };
-  type(1000);
-  assert.equal(lessons.recordBestIfFaster(progress), null, 'keys still locked');
+  assert.equal(lessons.recordBestIfFaster(progress, lesson(1000)), null, 'keys still locked');
   progress.unlocked = lessons.KEY_ORDER.length;
   progress.words = [];
-  type(2000); // 30 wpm
-  assert.equal(lessons.recordBestIfFaster(progress), 30);
-  assert.equal(lessons.recordBestIfFaster(progress), null, 'same speed is not a new best');
-  type(3000);
-  assert.equal(lessons.recordBestIfFaster(progress), null, 'slower is not a new best');
-  type(1500); // 40 wpm
-  assert.equal(lessons.recordBestIfFaster(progress), 40);
+  assert.equal(lessons.recordBestIfFaster(progress, lesson(2000)), 30);
+  assert.equal(lessons.recordBestIfFaster(progress, lesson(2000)), null, 'same speed is not a new best');
+  assert.equal(lessons.recordBestIfFaster(progress, lesson(3000)), null, 'slower is not a new best');
+  assert.equal(lessons.recordBestIfFaster(progress, lesson(1500)), 40);
   assert.equal(lessons.levelSummary(progress)[0].best, 40);
-  progress.words = [];
-  type(1000, 5); // fast but sloppy
-  assert.equal(lessons.recordBestIfFaster(progress), null, 'below the accuracy bar');
+  const partial = { count: lessons.LESSON_SIZE - 1, wpm: 90, accuracy: 1 };
+  assert.equal(lessons.recordBestIfFaster(progress, partial), null, 'not a whole lesson');
+  assert.equal(lessons.recordBestIfFaster(progress, lesson(1000, 5)), null, 'below the accuracy bar');
   const back = lessons.normalize(JSON.parse(JSON.stringify(progress)));
   assert.equal(back.bests[1], 40);
   lessons.switchLevel(back, 2);

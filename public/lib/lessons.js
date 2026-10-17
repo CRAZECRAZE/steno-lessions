@@ -367,12 +367,12 @@
     return true;
   }
 
-  // Personal best for the current prestige level: the fastest full window (at the accuracy
-  // bar) typed while every key is unlocked. Whole wpm, so a record means a visible gain.
-  // Returns the new best, or null if this word did not set one.
-  function recordBestIfFaster(progress) {
+  // Personal best for the current prestige level, judged on one whole finished lesson (its
+  // `stats`, all LESSON_SIZE words), never a rolling slice. Counts only while every key is
+  // unlocked and the lesson clears the accuracy bar. Whole wpm, so a record is a visible gain.
+  // Returns the new best, or null if this lesson did not set one.
+  function recordBestIfFaster(progress, stats) {
     if (progress.unlocked < KEY_ORDER.length) return null;
-    const stats = windowStats(progress);
     if (stats.count < LESSON_SIZE || stats.accuracy < ACCURACY_TARGET) return null;
     const wpm = Math.floor(stats.wpm);
     if (wpm <= (progress.bests[progress.level] || 0)) return null;
