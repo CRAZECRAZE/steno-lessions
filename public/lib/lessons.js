@@ -627,7 +627,7 @@
     if (eligible.length === 0) return [];
 
     const pool = eligible.filter(({ word }) => !avoid.has(word.text));
-    const source = pool.length >= count ? pool : eligible;
+    const source = pool.length >= count || options.strictAvoid ? pool : eligible;
     const byBit = weaknessByBit(progress, slotIndex);
     const weighted = source.map(({ word, usable }) => {
       // Plover's dictionary has no word frequencies, so combine a real frequency list with
@@ -755,9 +755,18 @@
     if (drill && (options.random || Math.random)() < DRILL_SHARE) {
       picked = pickWords(words, progress, slotIndex, { ...options, ...drill, count: 1 })[0];
     }
-    if (!picked) picked = pickWords(words, progress, slotIndex, { ...pickOptions, count: 1 })[0];
+    // strictAvoid: a band whose few eligible words were all just typed must not hand back the
+    // same word again - it falls through to the plain pick instead.
+    if (!picked) picked = pickWords(words, progress, slotIndex, { ...pickOptions, strictAvoid: true, count: 1 })[0];
     // An etude restriction (or any band option) can legitimately leave nothing eligible early
     // on, when few keys are mastered yet - fall back to a plain pick rather than return nothing.
+    // With very few keys the whole vocabulary can be inside the avoid list, so the list is
+    // shortened step by step (oldest dropped first) before a repeat is ever accepted.
+    const avoid = options.avoid || [];
+    for (const keep of [avoid.length, 20, 8, 3, 1]) {
+      if (picked || keep > avoid.length) continue;
+      picked = pickWords(words, progress, slotIndex, { ...options, avoid: avoid.slice(avoid.length - keep), strictAvoid: true, count: 1 })[0];
+    }
     if (!picked) picked = pickWords(words, progress, slotIndex, { ...options, count: 1 })[0];
     if (!picked) return null;
     return { ...picked, band, isProbe: Boolean(options.isProbe), focusKeyAtPick: focus };
@@ -776,6 +785,7 @@
     const normal = pickWords(words, progress, slotIndex, {
       ...pickOptions,
       avoid: [...(options.avoid || []), ...picked.map((word) => word.text)],
+      strictAvoid: true,
       count: count - picked.length,
     });
     picked.push(...normal);

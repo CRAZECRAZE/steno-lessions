@@ -623,3 +623,14 @@ test('nextWord drills a key stuck below the accuracy bar', () => {
   }
   assert.ok(hits >= 100, `drilled ${hits}/200`);
 });
+
+test('nextWord does not repeat the word just typed when the key set is tiny', () => {
+  const progress = lessons.emptyProgress();
+  progress.unlocked = 6;
+  const recent = [];
+  for (let i = 0; i < 30; i++) {
+    const word = lessons.nextWord(words, progress, slotIndex, { avoid: recent });
+    assert.notEqual(word.text, recent[recent.length - 1]);
+    recent.push(word.text);
+  }
+});
