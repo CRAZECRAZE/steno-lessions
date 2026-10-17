@@ -143,6 +143,7 @@
     candidates: [], // stroke sequences still possible for the current word
     strokeIdx: 0,
     wordMisses: 0,
+    wordWrongChords: 0,
     wordMs: 0,
     lastChordEnd: null,
     failures: [], // the latest wrong attempt - tracked for retry/undo, not displayed
@@ -349,7 +350,9 @@
     const target = currentStroke();
     const mask = unlockedMask();
     const scaffolds = state.progress.scaffolds;
-    const labelsOn = L.scaffoldVisible(state.progress, 'labels', scaffolds.labels);
+    // Temporary per-word reveal after repeated misses; never written to state.progress.scaffolds
+    const labelsOn = L.scaffoldVisible(state.progress, 'labels', scaffolds.labels)
+      || L.labelsRevealed(state.progress, state.wordWrongChords);
     const targetOn = L.scaffoldVisible(state.progress, 'target', scaffolds.target);
     const keyboardOn = L.scaffoldVisible(state.progress, 'keyboard', scaffolds.keyboard);
     // Least-consequential scaffold: the sound/key-name text line under each word in the
@@ -424,6 +427,7 @@
     state.candidates = word ? L.displayVariants(word, unlockedMask()) : [];
     state.strokeIdx = 0;
     state.wordMisses = 0;
+    state.wordWrongChords = 0;
     state.wordMs = 0;
     // The clock starts when the word appears, so finding and pressing the first chord counts
     // (otherwise a one-stroke word is timed only by how long the keys were held)
@@ -935,6 +939,7 @@
       // Accuracy is forgiving per word: however many wrong attempts a word takes, it counts
       // as one inaccuracy for the word, not one per attempt.
       state.wordMisses = 1;
+      state.wordWrongChords += 1;
       // Blame only the keys that were wrong (missed or extra), not the whole stroke, so one
       // slip on a key doesn't also count against the keys pressed correctly beside it.
       L.recordChord(state.progress, S.namesInBits((target ^ chord) & target || target), ms, false);

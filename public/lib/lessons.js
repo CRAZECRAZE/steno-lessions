@@ -455,6 +455,14 @@
     return Boolean(override);
   }
 
+  // Prestige level 3 has no helpers at all, so a learner stuck on one word gets its stroke
+  // labels shown after LABEL_REVEAL_MISSES wrong chords on it. A per-word override only: it
+  // never touches progress.scaffolds, and the caller resets the count when the next word starts.
+  const LABEL_REVEAL_MISSES = 3;
+  function labelsRevealed(progress, wordWrongChords) {
+    return progress.level === 3 && wordWrongChords >= LABEL_REVEAL_MISSES;
+  }
+
   // Snapshots every unlocked key's current samples/misses as the redo baseline for `stage`.
   // Called the moment a scaffold checkbox goes from checked to unchecked, so
   // `scaffoldRedoMastered` below has a clean "zero" to measure fresh practice from - without
@@ -880,6 +888,8 @@
     masteryTier,
     scaffoldTier,
     scaffoldVisible,
+    LABEL_REVEAL_MISSES,
+    labelsRevealed,
     recordScaffoldOff,
     ensureScaffoldMark,
     scaffoldRedoMastered,
