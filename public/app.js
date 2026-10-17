@@ -145,7 +145,7 @@
     wordMisses: 0,
     wordMs: 0,
     lastChordEnd: null,
-    failures: [], // wrong attempts still being drilled - tracked for retry/undo, not displayed
+    failures: [], // the latest wrong attempt - tracked for retry/undo, not displayed
     doneStrokes: [], // strokes of the current word already typed right, kept in the preview
     previewBits: 0, // the last stroke's chord, kept after release so the preview survives it
     sinceBreak: 0, // words typed since the last break; session-only, so a reload restarts at 0/LESSON_SIZE
@@ -154,7 +154,6 @@
     // first word(s) of the next stretch get the slow entrance animation instead of just appearing
     breakTimer: null,
     releaseTimers: new Map(), // event.code -> pending debounced-release timeout id
-    drill: 0,
     typed: 0, // words finished this session
     pressed: new Set(),
     chordBits: 0,
@@ -432,7 +431,6 @@
     state.failures = [];
     state.previewBits = 0;
     state.doneStrokes = [];
-    state.drill = 0;
   }
 
   // The word stream. Each word is a column, with its sounds and keys directly under it, so the
@@ -886,8 +884,6 @@
 
   // A pause between chords longer than this is not typing, so it is left out of the word's time (ms)
   const IDLE_MS = 3000;
-  // After a mistake, the stroke must be typed right this many times in a row to go on
-  const DRILL_REPEATS = 1;
   // The * stroke, which is undo in Plover (the T key on this layout)
   const UNDO = S.parseStroke('*');
 
@@ -923,7 +919,6 @@
         setFeedback('Nothing to undo. * only removes a wrong attempt.', 'bad');
       } else {
         state.failures.pop();
-        if (state.failures.length === 0) state.drill = 0;
         setFeedback(
           state.failures.length ? `Undone. ${state.failures.length} wrong attempt(s) left.` : 'Undone. Back on track.',
           'good',
@@ -935,7 +930,7 @@
 
     if (matches.length === 0) {
       // The mistake stays on screen as red text. The word waits on this stroke until it is
-      // typed right DRILL_REPEATS times in a row. Strokes already typed right are kept.
+      // typed right once. Strokes already typed right are kept.
       const target = currentStroke();
       // Accuracy is forgiving per word: however many wrong attempts a word takes, it counts
       // as one inaccuracy for the word, not one per attempt.
@@ -944,14 +939,12 @@
       // slip on a key doesn't also count against the keys pressed correctly beside it.
       L.recordChord(state.progress, S.namesInBits((target ^ chord) & target || target), ms, false);
       // Only the latest mistake is ever shown or undoable - repeating the same wrong chord,
-      // or making a different one, replaces it rather than piling on top of it. DRILL_REPEATS
-      // only ever asks for "1 more right in a row" regardless of how many tries it took to get
-      // there, so there is never more than one live mistake to track at once.
+      // or making a different one, replaces it rather than piling on top of it. There is
+      // never more than one live mistake to track at once.
       state.failures = [chord];
-      state.drill = DRILL_REPEATS;
       setFeedback(
         `Needs ${S.renderStroke(target)} (${namesOf(target)}). You pressed ${namesOf(chord)}. ` +
-          `Type it ${state.drill} more times in a row to go on, or press * (T key) to undo.`,
+          `Press * (T key) to undo.`,
         'bad',
       );
       refresh();
@@ -959,15 +952,7 @@
     }
 
     L.recordChord(state.progress, S.namesInBits(chord), ms, true);
-    if (state.drill > 0) {
-      state.drill -= 1;
-      if (state.drill > 0) {
-        setFeedback(`Right. ${state.drill} more in a row.`, 'good');
-        refresh();
-        return;
-      }
-      state.failures = [];
-    }
+    state.failures = [];
     state.candidates = matches;
     state.strokeIdx += 1;
     state.doneStrokes.push(chord);
@@ -1130,7 +1115,7 @@
     if (state.pressed.size === 0) {
       // A fresh stroke starts clean: finishChord already zeroed state.chordBits and cleared
       // every error visual the instant the last one was let go, so there is nothing left over
-      // here to hide. The failures state (and the drill count) are untouched, so undo (*)
+      // here to hide. The failures state is untouched, so undo (*)
       // still works and a wrong stroke still needs a correct retry.
       state.chordBits = 0;
       state.chordStart = performance.now();
