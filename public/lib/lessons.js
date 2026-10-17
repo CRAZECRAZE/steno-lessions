@@ -88,7 +88,7 @@
   // Per prestige level. 1: any visual aid (keyboard diagram or key hints) may be on.
   // 2: no diagram or hints, but a stroke helper (stroke labels or target highlight) may be on.
   // 3: every helper off, typing from the word alone.
-  const LEVEL_WPM = { 1: 28, 2: 38, 3: 50 };
+  const LEVEL_WPM = { 1: 28, 2: 28, 3: 28 };
   const MAX_LEVEL = 3;
   function wpmTarget(level = 1) {
     return LEVEL_WPM[level] || LEVEL_WPM[1];

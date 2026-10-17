@@ -54,10 +54,8 @@ test('a miss slows a key down rather than counting as a sample', () => {
   assert.ok(progress.keys['T-'].ewmaMs > 500);
 });
 
-test('the words-per-minute target is 28 / 38 / 50 on levels 1 / 2 / 3', () => {
-  assert.equal(lessons.wpmTarget(1), 28);
-  assert.equal(lessons.wpmTarget(2), 38);
-  assert.equal(lessons.wpmTarget(3), 50);
+test('the words-per-minute target is 28 on every level', () => {
+  for (const level of [1, 2, 3]) assert.equal(lessons.wpmTarget(level), 28);
 });
 
 test('windowStats reports words per minute and accuracy over the newest words', () => {
@@ -433,7 +431,7 @@ test('levelSummary reports every level: the active one live, the others from the
   lessons.switchLevel(progress, 2);
   progress.unlocked = 10;
   const [one, two, three] = lessons.levelSummary(progress);
-  assert.deepEqual([one.wpm, two.wpm, three.wpm], [28, 38, 50]);
+  assert.deepEqual([one.wpm, two.wpm, three.wpm], [28, 28, 28]);
   assert.equal(one.allUnlocked, true);
   assert.equal(one.done, false, "unlocking every key is not completing the level");
   assert.equal(one.active, false);
@@ -468,16 +466,19 @@ test('a level is only complete after every key is unlocked and a fresh lesson hi
   assert.equal(lessons.levelSummary(back)[0].done, true, 'stays earned while on another level');
 });
 
-test('unlocking at level 2 needs 38 wpm, level 3 needs 50', () => {
+test('unlocking needs 28 wpm on every level', () => {
   const progress = lessons.emptyProgress();
   progress.level = 2;
   for (const name of lessons.unlockedNames(progress)) {
     for (let i = 0; i < 10; i++) lessons.recordChord(progress, [name], 400, true);
   }
   for (let i = 0; i < lessons.LESSON_SIZE; i++) lessons.recordWord(progress, { ms: 1800, strokes: 1, misses: 0 }); // ~33 wpm
-  assert.equal(lessons.canUnlock(progress), false);
-  progress.level = 1;
   assert.equal(lessons.canUnlock(progress), true);
+  for (let i = 0; i < lessons.LESSON_SIZE; i++) lessons.recordWord(progress, { ms: 3000, strokes: 1, misses: 0 }); // ~20 wpm
+  for (const level of [1, 2, 3]) {
+    progress.level = level;
+    assert.equal(lessons.canUnlock(progress), false);
+  }
 });
 
 test('scaffolds default to on for a fresh profile and for an old save that predates the field', () => {
