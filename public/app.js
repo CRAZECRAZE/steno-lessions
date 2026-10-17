@@ -911,6 +911,9 @@
     state.wordMs += ms;
     state.lastChordEnd = now;
     const matches = state.candidates.filter((strokes) => strokes[state.strokeIdx] === chord);
+    // A wrong stroke (or an undo) is only previewed while it is held; once let go the preview
+    // falls back to the strokes already typed right.
+    if (matches.length === 0) state.previewBits = 0;
 
     if (matches.length === 0 && chord === UNDO) {
       // As in Plover, * on its own is undo. It removes the last wrong attempt and nothing else,

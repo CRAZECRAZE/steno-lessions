@@ -51,8 +51,8 @@ function typing(text) {
     rest: () => view(state.last),
     press(notation) {
       const chord = bitsOf(notation);
-      state.last = chord;
       const matches = state.candidates.filter((strokes) => strokes[state.idx] === chord);
+      // A wrong stroke is only previewed while held; released, it is dropped (state.last stays 0)
       if (matches.length === 0) return 'wrong';
       state.candidates = matches;
       state.idx += 1;
@@ -74,7 +74,7 @@ test('one stroke: a wrong chord shows what it really is, never the word', () => 
   assert.deepEqual(t.hold('KA'), { text: 'ka', resolved: true });
   assert.deepEqual(t.hold('KAP'), { text: 'KAP', resolved: false });
   assert.equal(t.press('KA'), 'wrong');
-  assert.deepEqual(t.rest(), { text: 'ka', resolved: true });
+  assert.equal(t.rest(), null);
 });
 
 test('one stroke: nothing is shown before any key is pressed', () => {
@@ -102,8 +102,9 @@ test('two strokes: the second stroke completes the word', () => {
 test('two strokes: a wrong second stroke keeps the first and shows the mistake after it', () => {
   const t = typing('data');
   t.press('TKAT');
+  assert.deepEqual(t.hold('-T'), { text: 'dat at', resolved: true });
   assert.equal(t.press('-T'), 'wrong');
-  assert.deepEqual(t.rest(), { text: 'dat at', resolved: true });
+  assert.deepEqual(t.rest(), { text: 'dat', resolved: true });
   // The first stroke is kept through the mistake, and the right stroke still finishes the word
   assert.equal(t.press('A'), 'done');
 });
@@ -116,8 +117,9 @@ test('two strokes: a wrong second stroke with no meaning shows raw steno after t
 
 test('two strokes: a wrong FIRST stroke has nothing before it and does not advance', () => {
   const t = typing('abbess');
+  assert.deepEqual(t.hold('TKAT'), { text: 'dat', resolved: true });
   assert.equal(t.press('TKAT'), 'wrong');
-  assert.deepEqual(t.rest(), { text: 'dat', resolved: true });
+  assert.equal(t.rest(), null);
   assert.equal(t.press('AB'), 'ok');
   assert.deepEqual(t.rest(), { text: 'ab', resolved: true });
 });
@@ -152,8 +154,9 @@ test('three strokes: only the final stroke turns it into the word', () => {
 test('three strokes: a wrong middle stroke keeps the first and does not advance', () => {
   const t = typing('abandons');
   t.press('A');
+  assert.deepEqual(t.hold('AB'), { text: 'a ab', resolved: true });
   assert.equal(t.press('AB'), 'wrong');
-  assert.deepEqual(t.rest(), { text: 'a ab', resolved: true });
+  assert.deepEqual(t.rest(), { text: 'a', resolved: true });
   assert.equal(t.press('PWAPBD'), 'ok');
   assert.deepEqual(t.rest(), { text: 'a PWAPBD', resolved: false });
 });
@@ -162,8 +165,9 @@ test('three strokes: a wrong last stroke keeps both finished strokes', () => {
   const t = typing('abandons');
   t.press('A');
   t.press('PWAPBD');
+  assert.deepEqual(t.hold('-T'), { text: 'a PWAPBD at', resolved: false });
   assert.equal(t.press('-T'), 'wrong');
-  assert.deepEqual(t.rest(), { text: 'a PWAPBD at', resolved: false });
+  assert.deepEqual(t.rest(), { text: 'a PWAPBD', resolved: false });
   assert.equal(t.press('O*PBS'), 'done');
 });
 
