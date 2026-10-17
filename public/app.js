@@ -146,6 +146,7 @@
     wordMs: 0,
     lastChordEnd: null,
     failures: [], // wrong attempts still being drilled - tracked for retry/undo, not displayed
+    doneStrokes: [], // strokes of the current word already typed right, kept in the preview
     previewBits: 0, // the last stroke's chord, kept after release so the preview survives it
     sinceBreak: 0, // words typed since the last break; session-only, so a reload restarts at 0/LESSON_SIZE
     onBreak: false, // true only during the blank pause right at a LESSON_SIZE milestone
@@ -430,6 +431,7 @@
     state.lastChordEnd = performance.now();
     state.failures = [];
     state.previewBits = 0;
+    state.doneStrokes = [];
     state.drill = 0;
   }
 
@@ -486,6 +488,10 @@
         // preview keeps showing that stroke's resolution (state.previewBits) until the next
         // one starts replacing it, live, key by key.
         const held = state.pressed.size > 0 ? state.chordBits : state.previewBits;
+        // Strokes of this word already typed right stay put, in order, ahead of the stroke
+        // being held (TKAT then A reads "dat" and keeps "dat" once TKAT is let go).
+        const parts = state.doneStrokes.map((bits) => state.strokeWord.get(bits) || S.renderStroke(bits));
+        let resolved = parts.length > 0;
         if (held) {
           // Only a stroke that finishes the word shows the word. A first stroke of a multi-stroke
           // variant (TKAT of TKAT/...) is shown as what that stroke alone translates to ("dat"),
@@ -493,18 +499,23 @@
           const known = state.strokeWord.get(held);
           const finishes = state.candidates.some((seq) => seq[state.strokeIdx] === held && state.strokeIdx === seq.length - 1);
           const continues = finishes || (!known && state.candidates.some((seq) => seq[state.strokeIdx] === held));
-          if (continues) {
-            preview.classList.add('resolved');
-            preview.textContent = word.text;
+          if (continues && parts.length === 0) {
+            parts.push(word.text);
+            resolved = true;
+          } else if (continues) {
+            parts.length = 0;
+            parts.push(word.text);
+          } else if (known) {
+            parts.push(known);
+            resolved = true;
           } else {
-            if (known) {
-              preview.classList.add('resolved');
-              preview.textContent = known;
-            } else {
-              preview.classList.add('unresolved');
-              preview.textContent = S.renderStroke(held);
-            }
+            parts.push(S.renderStroke(held));
+            resolved = false;
           }
+        }
+        if (parts.length) {
+          preview.classList.add(resolved ? 'resolved' : 'unresolved');
+          preview.textContent = parts.join(' ');
         }
       }
       cell.appendChild(preview);
@@ -969,6 +980,8 @@
     }
     state.candidates = matches;
     state.strokeIdx += 1;
+    state.doneStrokes.push(chord);
+    state.previewBits = 0;
     setFeedback('Good', 'good');
     if (matches.some((strokes) => strokes.length === state.strokeIdx)) {
       wordDone();
