@@ -729,6 +729,7 @@
         `<div class="kt-row note">${escapeHtml(LEVEL_RULES[row.level])}</div>` +
         `<div class="kt-bar"><span style="width:${fill}%"></span></div>` +
         `<div class="kt-row note">${escapeHtml(status)}</div>` +
+        (row.best ? `<div class="kt-row note">Best: ${row.best} wpm</div>` : '') +
         (row.active ? '' : `<div class="kt-row note muted">Click to switch. Each level keeps its own keys.</div>`));
       star.addEventListener('click', () => chooseLevel(row.level));
       list.appendChild(star);
@@ -1022,8 +1023,15 @@
       );
       showUnlockToast(allKeys ? 'All Keys!' : `${S.displayName(name)} (${sound})`, allKeys);
     } else if (L.completeIfReady(state.progress)) {
+      L.recordBestIfFaster(state.progress);
       setFeedback(`Prestige ${state.progress.level} complete!`, 'good');
       showUnlockToast(`Prestige ${state.progress.level}`, true, 'Complete');
+    } else {
+      const best = L.recordBestIfFaster(state.progress);
+      if (best) {
+        setFeedback(`New prestige ${state.progress.level} best: ${best} wpm!`, 'good');
+        showUnlockToast(`${best} wpm`, true, `Prestige ${state.progress.level} PB`);
+      }
     }
 
     // Purely cosmetic break-reminder, every LESSON_SIZE words - a human milestone, not a

@@ -129,6 +129,8 @@
       totalTyped: 0,
       // Prestige levels finished (level -> true), shared across levels like totalTyped.
       completed: {},
+      // Fastest wpm per prestige level (level -> wpm), set only while every key is unlocked.
+      bests: {},
       scaffolds: defaultScaffolds(),
       scaffoldMarks: {},
       level: 1,
@@ -166,6 +168,7 @@
         started,
         allUnlocked: unlocked >= KEY_ORDER.length,
         done: Boolean(progress.completed[level]),
+        best: progress.bests[level] || null,
       });
     }
     return rows;
@@ -241,6 +244,12 @@
     if (saved.completed && typeof saved.completed === 'object') {
       for (const level of Object.keys(LEVEL_WPM)) {
         if (saved.completed[level] === true) progress.completed[level] = true;
+      }
+    }
+    if (saved.bests && typeof saved.bests === 'object') {
+      for (const level of Object.keys(LEVEL_WPM)) {
+        const best = Number(saved.bests[level]);
+        if (Number.isFinite(best) && best > 0) progress.bests[level] = best;
       }
     }
     if (Number.isInteger(saved.level) && LEVEL_WPM[saved.level]) progress.level = saved.level;
@@ -356,6 +365,19 @@
     }
     progress.completed[progress.level] = true;
     return true;
+  }
+
+  // Personal best for the current prestige level: the fastest full window (at the accuracy
+  // bar) typed while every key is unlocked. Whole wpm, so a record means a visible gain.
+  // Returns the new best, or null if this word did not set one.
+  function recordBestIfFaster(progress) {
+    if (progress.unlocked < KEY_ORDER.length) return null;
+    const stats = windowStats(progress);
+    if (stats.count < LESSON_SIZE || stats.accuracy < ACCURACY_TARGET) return null;
+    const wpm = Math.floor(stats.wpm);
+    if (wpm <= (progress.bests[progress.level] || 0)) return null;
+    progress.bests[progress.level] = wpm;
+    return wpm;
   }
 
   // Unlocks the next key if canUnlock says so. Starts counting words again from zero.
@@ -881,6 +903,7 @@
     levelFor,
     levelSummary,
     completeIfReady,
+    recordBestIfFaster,
     switchLevel,
   };
 });
