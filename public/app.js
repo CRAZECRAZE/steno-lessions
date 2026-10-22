@@ -96,7 +96,20 @@
       return "plover";
     }
   }
-  const theory = readTheory();
+  let theory = readTheory();
+
+  // Whether a theory's data is published here. Only the headers are read: the body is
+  // cancelled, so the check costs no download. A theory that isn't published (Lapwing's data
+  // is built locally, so GitHub Pages doesn't have it) is never loaded, and the page uses Plover.
+  async function theoryReady(id) {
+    try {
+      const response = await fetch(THEORIES[id].dir + "bundle.json");
+      response.body?.cancel();
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
 
   // [flag in progress.scaffolds, matching checkbox id], ordered least -> most consequential.
   const SCAFFOLD_BOXES = [
@@ -1215,6 +1228,10 @@
   async function init() {
     // The layout and dictionary are hardcoded data, the same on a plain static host (e.g.
     // GitHub Pages) as behind server.js, so there's exactly one place to load them from.
+    const ready = Object.fromEntries(await Promise.all(
+      Object.keys(THEORIES).map(async (id) => [id, await theoryReady(id)]),
+    ));
+    if (!ready[theory]) theory = "plover";
     try {
       state.data = await getJson(THEORIES[theory].dir + 'bundle.json');
     } catch (error) {
@@ -1227,6 +1244,7 @@
     }
     const theoryPicker = $('theory');
     theoryPicker.innerHTML = Object.entries(THEORIES)
+      .filter(([id]) => ready[id])
       .map(([id, { label }]) => `<option value="${id}">${label}</option>`).join('');
     theoryPicker.value = theory;
     theoryPicker.addEventListener('change', (event) => {
