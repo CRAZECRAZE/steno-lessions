@@ -1067,6 +1067,8 @@
     state.sinceBreak += 1;
     if (state.sinceBreak >= L.LESSON_SIZE) {
       state.sinceBreak = 0;
+      // The finished words of the lesson just ended go too, so the stream wipes clean for the break
+      state.done = [];
       state.lastLessonStats = L.windowStats(state.progress);
       L.recordLesson(state.progress, state.lastLessonStats);
       // The PB is the whole finished lesson's speed. A level-complete or unlock toast on this
