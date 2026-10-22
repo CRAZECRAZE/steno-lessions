@@ -547,7 +547,8 @@
         // it. Once the whole stroke is let go, every other visual resets instantly - but the
         // preview keeps showing that stroke's resolution (state.previewBits) until the next
         // one starts replacing it, live, key by key.
-        const held = state.pressed.size > 0 ? state.chordBits : state.previewBits;
+        // A stroke still waiting for its rest (state.partial) stays in the preview while it is completed.
+        const held = state.pressed.size > 0 ? state.partial | state.chordBits : state.partial || state.previewBits;
         // Strokes of this word already typed right stay put, in order, ahead of the stroke
         // being held (TKAT then A reads "dat" and keeps "dat" once TKAT is let go).
         const shown = L.previewFor({
@@ -560,16 +561,19 @@
           render: S.displayStroke,
         });
         if (shown) {
-          // Red means the held stroke is wrong. A stroke that is right but not a whole word on
-          // its own (the first stroke of a two-stroke word) is on track, so it stays neutral.
-          const onTrack = held === 0 || L.classifyStroke({
+          // Green is a proper stroke that is right: a finished word, or a stroke that is the next
+          // one (or a restart) of a spelling, even if the word is not finished yet. A stroke that
+          // is only part of a stroke is not accurate yet, so it is pending, not green. A stroke that
+          // fits nothing is red.
+          const fit = held === 0 ? null : L.classifyStroke({
             chord: held,
             candidates: state.candidates,
             all: state.all,
             strokeIdx: state.strokeIdx,
-          }) !== null;
-          if (shown.resolved) preview.classList.add('resolved');
-          else if (!onTrack) preview.classList.add('unresolved');
+          });
+          if (fit && fit.type === 'partial') preview.classList.add('pending');
+          else if (held !== 0 && !fit) preview.classList.add('unresolved');
+          else if (shown.resolved || fit || state.doneStrokes.length > 0) preview.classList.add('resolved');
           preview.textContent = shown.text;
         }
       }

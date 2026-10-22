@@ -443,6 +443,8 @@ body.paused #practice .feedback {
 }
 .preview.resolved { color: var(--good); }
 .preview.unresolved { color: var(--bad); font-style: italic; }
+/* Part of a stroke, still to be finished: not accurate yet, so not green or red */
+.preview.pending { color: var(--muted); font-style: italic; }
 
 .toggle {
   display: flex;
