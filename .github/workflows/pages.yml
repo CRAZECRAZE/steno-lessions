@@ -22,6 +22,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # Lapwing's data is generated at deploy time from its JSON dictionaries, so it isn't in git
+      - name: Download Lapwing's dictionaries
+        run: |
+          mkdir -p "$RUNNER_TEMP/lapwing"
+          for file in lapwing-base.json lapwing-numbers.json lapwing-commands.json \
+              lapwing-semi-modal-movement.json lapwing-prefixed-proper-nouns.json lapwing-uk-additions.json; do
+            curl --fail --silent --show-error --location --max-time 120 \
+              -o "$RUNNER_TEMP/lapwing/$file" \
+              "https://raw.githubusercontent.com/aerickt/plover-lapwing-aio/main/plover_lapwing/dictionaries/$file"
+          done
+      - name: Build Lapwing's data
+        run: node scripts/build-theory.js lapwing "$RUNNER_TEMP/lapwing"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: public
