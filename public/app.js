@@ -1069,7 +1069,9 @@
     // or making a different one, replaces it rather than piling on top of it. There is
     // never more than one live mistake to track at once.
     state.failures = [used];
-    const needed = nextStrokes().map((stroke) => `- ${stroke}`).join('\n');
+    // Every full way to write the word, so the learner sees each spelling end to end, not just the next stroke
+    const spellings = [...new Set(state.all.map((seq) => seq.map((bits) => S.displayStroke(bits)).join('/')))];
+    const needed = spellings.map((spelling) => `- ${spelling}`).join('\n');
     setFeedback(
       `Needs\n${needed}\nYou pressed ${S.displayStroke(used)}\nPress * (T key) to undo.`,
       'bad',
