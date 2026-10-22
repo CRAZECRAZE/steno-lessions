@@ -306,6 +306,8 @@ body.paused #practice .feedback {
      way to tell that line apart from the ghost row below it and would clip real text. */
   height: 230px;
   overflow: hidden;
+  /* The focus moving down a row scrolls the stream one row, like monkeytype's text */
+  scroll-behavior: smooth;
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
@@ -346,6 +348,15 @@ body.paused #practice .feedback {
   position: relative;
 }
 .cell.current { box-shadow: inset 0 0 0 1px var(--muted); }
+
+/* Finished words stay where they were typed, grayed out, so the stream reads like typed text
+   behind the word being typed. A word that needed a retry is grayed the same way, with its
+   word text kept faintly red. */
+.cell.done { opacity: 0.35; }
+.cell.done .w,
+.cell.done .ch,
+.cell.done .kc { color: var(--muted); }
+.cell.done.missed .w { color: color-mix(in srgb, var(--bad) 55%, var(--muted)); }
 
 .w {
   grid-column: 1 / -1;

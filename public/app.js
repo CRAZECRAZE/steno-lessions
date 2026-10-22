@@ -135,6 +135,7 @@
     strokeWord: new Map(), // single-stroke chord bits -> the word it translates to
     hints: readHints(),
     keyEls: new Map(), // key element -> the event.codes it stands for (several for a merged key)
+    done: [], // finished words, oldest first, kept in the stream in place behind the one being typed
     queue: [], // live, rolling buffer of upcoming words - queue[0] is the one being typed
     ghostWords: [], // decorative real words past the queue, never typed or recorded - see GHOST_COUNT
     recent: [], // words used lately, so the queue does not repeat them
@@ -186,6 +187,9 @@
   // Hidden entirely near a break, where the real, shrinking taper count is the honest thing to
   // show instead.
   const GHOST_COUNT = 26;
+  // Finished words kept in the stream behind the one being typed (see state.done). Enough to
+  // fill the strip several rows over; anything older is already scrolled out of view.
+  const DONE_KEEP = 40;
 
   const currentWord = () => state.queue[0];
   // The stroke sequence to show: the first one that is still possible
@@ -439,8 +443,9 @@
   // The word stream. Each word is a column, with its sounds and keys directly under it, so the
   // words, sounds and keys run as three parallel lines (two when Key hints are off, since the
   // keys line is hidden). The stroke being typed is highlighted. This is now a small live,
-  // rolling buffer (LOOKAHEAD words) rather than a fixed lesson batch - there is no "done"
-  // word kept on screen, only the current one and what's coming right after it.
+  // rolling buffer (LOOKAHEAD words) rather than a fixed lesson batch. Finished words stay in
+  // the stream where they were typed, grayed out (state.done), so finishing a word only moves
+  // the focus along - nothing before it jumps.
   function renderStream() {
     const stream = $('stream');
     stream.textContent = '';
@@ -451,6 +456,7 @@
     state.justResumed = false;
     const mask = unlockedMask();
     let current = null;
+    let lastDone = null;
     // The decorative ghost strip (see GHOST_COUNT/refillGhostWords above) is rendered through
     // this exact same loop, as real dictionary words - never real queued ones, never typed or
     // recorded - so a ghost cell's shape, coloring and spacing is pixel-identical to a real
@@ -458,17 +464,23 @@
     // fade the whole cell out - no separate rendering path to drift out of sync with this one.
     // Suppressed entirely near a break, where the real, shrinking taper count is the honest
     // thing to show instead.
-    const items = state.queue.map((word) => ({ word, isGhost: false }));
+    // Finished words come first, then the live queue, whose first word is the one being typed.
+    const items = state.done.map((word) => ({ word, isDone: true, isGhost: false }));
+    for (const word of state.queue) items.push({ word, isDone: false, isGhost: false });
     if (!nearBreak()) {
-      for (const word of state.ghostWords) items.push({ word, isGhost: true });
+      for (const word of state.ghostWords) items.push({ word, isDone: false, isGhost: true });
     }
+    const focusIndex = state.done.length;
     for (let i = 0; i < items.length; i++) {
-      const { word, isGhost } = items[i];
-      const isCurrent = !isGhost && i === 0;
-      const strokes = isCurrent ? shownStrokes() : L.displayVariants(word, mask)[0] || [];
+      const { word, isDone, isGhost } = items[i];
+      const isCurrent = !isDone && !isGhost && i === focusIndex;
+      // A finished word shows the strokes it was actually typed with, not a dictionary guess.
+      const strokes = isDone ? word.strokes : isCurrent ? shownStrokes() : L.displayVariants(word, mask)[0] || [];
       const cell = document.createElement('div');
       cell.className = `cell${isCurrent ? ' current' : ''}` +
-        `${entering && !isGhost ? ' entering' : ''}${isGhost ? ' ghost' : ''}`;
+        `${entering && !isGhost && !isDone ? ' entering' : ''}${isGhost ? ' ghost' : ''}` +
+        `${isDone ? ' done' : ''}${isDone && word.missed ? ' missed' : ''}`;
+      if (isDone) lastDone = cell;
       if (isGhost) cell.setAttribute('aria-hidden', 'true');
       cell.style.gridTemplateColumns = `repeat(${Math.max(1, strokes.length)}, auto)`;
       // After repeated misses the labels hidden by the level appear for just this word, as a
@@ -579,10 +591,19 @@
       if (isCurrent) current = cell;
       stream.appendChild(cell);
     }
-    if (current) {
-      // Keep the word being typed in view as the rolling buffer fills the box.
-      current.scrollIntoView({ block: 'nearest' });
+    const focus = current || lastDone;
+    if (focus) keepFocusOnSecondRow(stream, focus);
+  }
+
+  // The stream wraps into rows, and the word being typed sits on its second row: the row above
+  // it is scrolled to the top, so the words finished on that row stay in view. It is set on
+  // every render; the stream animates the step when the focus moves down a row (style.css).
+  function keepFocusOnSecondRow(stream, focus) {
+    let rowTop = 0;
+    for (const cell of stream.children) {
+      if (cell.offsetTop < focus.offsetTop) rowTop = Math.max(rowTop, cell.offsetTop);
     }
+    stream.scrollTop = rowTop;
   }
 
   // A green-up/red-down delta span, like keybr's metrics row. `fmt` formats the raw delta value.
@@ -1003,6 +1024,11 @@
       L.recordProbe(state.progress, finished.focusKeyAtPick, state.wordMs);
     }
     state.typed += 1;
+    // The finished word stays in the stream where it is, grayed out, instead of vanishing and
+    // pulling everything after it along. Only the newest DONE_KEEP are kept, so the stream
+    // stays small; the rest have already scrolled out of view.
+    state.done.push({ text: finished.text, strokes: state.doneStrokes.slice(), missed: state.wordMisses > 0 });
+    state.done.splice(0, Math.max(0, state.done.length - DONE_KEEP));
     state.queue.shift();
     // The ghost strip shrinks from the front in lockstep with the real queue - one consumed
     // per word, never refilled mid-stretch (see refillGhostWords) - so it reads as the same
@@ -1262,6 +1288,7 @@
       state.progress = incoming;
       state.recent = [];
       state.queue = [];
+      state.done = [];
       state.sinceBreak = 0;
       L.switchLevel(state.progress, L.levelFor(state.progress.scaffolds, state.hints));
       applyScaffoldBoxes();

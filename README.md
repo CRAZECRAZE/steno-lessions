@@ -18,7 +18,7 @@ Settings come from environment variables:
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `STENO_LESSIONS_DATA` | `~/.config/steno-lessions/progress.json` | Where progress is saved |
+| `STENO_LESSIONS_DATA` | `progress.json` in the project folder (git-ignored) | Where progress is saved |
 | `PORT` | `4321` | Port to listen on |
 
 ## Hosting it statically (e.g. GitHub Pages)
@@ -43,7 +43,7 @@ Keys are taken over only when they are steno keys. Ctrl, Alt and Meta combos, an
 - Key names follow traditional steno. Left-side keys have no dash (`S`, `T`, `K`), and right-side keys take one (`-S`, `-T`, `-R`). A letter with only one key has no dash, like the vowels (`A`, `O`, `E`, `U`) and `-F`.
 - Any stroke Plover maps to the word counts. For example, `and` can be typed as `STK` or `-PB`.
 - A wrong chord stays on screen in red, and the message says which keys you pressed and which stroke the word needs. The word waits on that stroke until you type it right once. Strokes you already got right are kept. As in Plover, the `*` stroke is undo, and it is the T key on this layout: pressing it alone removes the last wrong attempt.
-- The stream shows about 25 words. The word being typed is on the second row, and the stream scrolls as you finish words. Only strokes made from unlocked keys are shown.
+- The stream shows about 25 words. The word being typed is on the second row. Finished words stay in place, grayed out, and turn faintly red if the word needed a retry, so the focus moves along the line as in monkeytype. When the focus moves down a row, the stream scrolls one row. Only strokes made from unlocked keys are shown.
 
 Steno keys show the sound big, with the letter you press small in the corner. Keys without a steno meaning are light gray. Steno keys you have not unlocked yet are darker gray, and show no sound until they unlock.
 

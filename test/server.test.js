@@ -8,7 +8,7 @@ const http = require('node:http');
 // The server reads its settings when it loads, so point them at a fixture first.
 const dir = fs.mkdtempSync(path.join(process.env.CLAUDE_JOB_DIR ? path.join(process.env.CLAUDE_JOB_DIR, 'tmp') : os.tmpdir(), 'steno-lessions-test-'));
 fs.mkdirSync(dir, { recursive: true });
-process.env.STENO_LESSONS_DATA = path.join(dir, 'progress.json');
+process.env.STENO_LESSIONS_DATA = path.join(dir, 'progress.json');
 
 const { handle } = require('../server.js');
 

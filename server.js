@@ -2,17 +2,15 @@
 // and saves lesson progress to a file. No external process or dictionary install needed.
 //
 // Environment:
-//   STENO_LESSIONS_DATA  file that stores progress (default: ~/.config/steno-lessions/progress.json)
+//   STENO_LESSIONS_DATA  file that stores progress (default: progress.json in this project)
 //   PORT                port to listen on (default: 4321)
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const os = require('node:os');
 
 const PUBLIC = path.join(__dirname, 'public');
 const BUNDLE_FILE = path.join(PUBLIC, 'data', 'bundle.json');
-const DATA_FILE =
-  process.env.STENO_LESSIONS_DATA || path.join(os.homedir(), '.config', 'steno-lessions', 'progress.json');
+const DATA_FILE = process.env.STENO_LESSIONS_DATA || path.join(__dirname, 'progress.json');
 const PORT = Number(process.env.PORT) || 4321;
 const MAX_BODY = 1024 * 1024;
 
