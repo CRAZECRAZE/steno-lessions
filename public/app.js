@@ -522,7 +522,11 @@
           render: S.displayStroke,
         });
         if (shown) {
-          preview.classList.add(shown.resolved ? 'resolved' : 'unresolved');
+          // Red means the held stroke is wrong. A stroke that is right but not a whole word on
+          // its own (the first stroke of a two-stroke word) is on track, so it stays neutral.
+          const onTrack = held === 0 || state.candidates.some((seq) => seq[state.strokeIdx] === held);
+          if (shown.resolved) preview.classList.add('resolved');
+          else if (!onTrack) preview.classList.add('unresolved');
           preview.textContent = shown.text;
         }
       }
