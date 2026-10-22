@@ -169,8 +169,8 @@
   }
 
   // What the learner sees for a stroke: initial consonants, vowel group (A O * E U in key
-  // order, so the star reads inside it), then finals, joined by '/' only between non-empty
-  // groups: TH/AOE/TS, STR/TRS, S. A stroke with only finals keeps its leading dash, like
+  // order, so the star reads inside it), then finals, joined by '-' only between non-empty
+  // groups: TH-AOE-TS, STR-TRS, S. A stroke with only finals keeps its leading dash, like
   // Plover's -TS. The number key is a plain '#' prefix. Display only - renderStroke stays the
   // Plover notation that dictionary entries are matched against.
   function displayStroke(bits) {
@@ -178,7 +178,7 @@
       SLOTS.slice(from, to).map(([letter], i) => (bits & (1 << (from + i)) ? letter : '')).join('');
     const groups = [letters(0, LEFT_END), letters(LEFT_END, 12), letters(12, NUMBER_SLOT)];
     const number = bits & (1 << NUMBER_SLOT) ? '#' : '';
-    const text = groups.filter(Boolean).join('/');
+    const text = groups.filter(Boolean).join('-');
     return `${number}${!groups[0] && !groups[1] && groups[2] ? '-' : ''}${text}`;
   }
 
