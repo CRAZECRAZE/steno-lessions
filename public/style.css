@@ -288,6 +288,7 @@ body.paused #practice .feedback {
 
 .feedback {
   text-align: center;
+  white-space: pre-line;
   margin-top: 12px;
   min-height: 1.5em;
   color: var(--muted);

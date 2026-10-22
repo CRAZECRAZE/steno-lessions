@@ -594,6 +594,26 @@
       .map((item) => item.strokes);
   }
 
+  // How a finished stroke fits a word. Optimistic by design: a stroke counts as a mistake only
+  // when it fits nothing. `candidates` are the spellings still possible after the strokes typed
+  // right so far, `all` is every spelling of the word, and `strokeIdx` is the next stroke due.
+  // Returns one of:
+  //   { type: 'next', matches }     the next stroke of some spelling
+  //   { type: 'restart', matches }  the first stroke of a spelling: the word is being redone
+  //   { type: 'partial' }           part of the next stroke (keys let go early): keep going
+  //   null                          none of those: a real mistake
+  function classifyStroke({ chord, candidates, all, strokeIdx }) {
+    if (!chord) return null;
+    const matches = candidates.filter((seq) => seq[strokeIdx] === chord);
+    if (matches.length) return { type: 'next', matches };
+    if (strokeIdx > 0) {
+      const restart = all.filter((seq) => seq[0] === chord);
+      if (restart.length) return { type: 'restart', matches: restart };
+    }
+    const partOfNext = candidates.some((seq) => seq[strokeIdx] !== undefined && (chord & ~seq[strokeIdx]) === 0);
+    return partOfNext ? { type: 'partial' } : null;
+  }
+
   // 0 (fully accurate) to 1 (always wrong): how much a key's own weakness should pull word
   // selection toward it. Deliberately the *raw* accuracy deficit, not `confidence` - confidence
   // normalizes accuracy against KEY_ACCURACY_TARGET (0.8) and multiplies in a speed term that
@@ -861,6 +881,7 @@
   return {
     KEY_ORDER,
     START_KEYS,
+    classifyStroke,
     LESSON_SIZE,
     ACCURACY_TARGET,
     KEY_ACCURACY_TARGET,

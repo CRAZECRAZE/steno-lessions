@@ -172,6 +172,8 @@
     recent: [], // words used lately, so the queue does not repeat them
     queuedCount: 0, // words pushed onto the queue this session, for the probe schedule
     lastLessonStats: null, // windowStats as of the last LESSON_SIZE-word milestone, for HUD deltas
+    all: [], // every stroke sequence for the current word, so a redone word can start again
+    partial: 0, // part of the next stroke (keys let go early), waiting for the rest
     candidates: [], // stroke sequences still possible for the current word
     strokeIdx: 0,
     wordMisses: 0,
@@ -225,6 +227,9 @@
   const currentWord = () => state.queue[0];
   // The stroke sequence to show: the first one that is still possible
   const shownStrokes = () => state.candidates[0] || [];
+  // Every stroke the word could need next, one per spelling, shown once each
+  const nextStrokes = () => [...new Set(state.candidates.map((seq) => seq[state.strokeIdx]).filter(Boolean))]
+    .map((bits) => S.displayStroke(bits));
   const currentStroke = () => shownStrokes()[state.strokeIdx] || 0;
   const unlockedMask = () => L.unlockedMask(state.progress, state.slotIndex);
   // The steno keys held right now, as a stroke mask
@@ -458,7 +463,9 @@
   // Only stroke sequences that use unlocked keys are shown, so a word never asks for a locked key
   function startWord() {
     const word = currentWord();
-    state.candidates = word ? L.displayVariants(word, unlockedMask()) : [];
+    state.all = word ? L.displayVariants(word, unlockedMask()) : [];
+    state.candidates = state.all;
+    state.partial = 0;
     state.strokeIdx = 0;
     state.wordMisses = 0;
     state.wordWrongChords = 0;
@@ -555,7 +562,12 @@
         if (shown) {
           // Red means the held stroke is wrong. A stroke that is right but not a whole word on
           // its own (the first stroke of a two-stroke word) is on track, so it stays neutral.
-          const onTrack = held === 0 || state.candidates.some((seq) => seq[state.strokeIdx] === held);
+          const onTrack = held === 0 || L.classifyStroke({
+            chord: held,
+            candidates: state.candidates,
+            all: state.all,
+            strokeIdx: state.strokeIdx,
+          }) !== null;
           if (shown.resolved) preview.classList.add('resolved');
           else if (!onTrack) preview.classList.add('unresolved');
           preview.textContent = shown.text;
@@ -976,12 +988,27 @@
     }
     state.wordMs += ms;
     state.lastChordEnd = now;
-    const matches = state.candidates.filter((strokes) => strokes[state.strokeIdx] === chord);
+    // Optimistic reading of the stroke, before it counts as a mistake. A chord let go early
+    // (part of the next stroke) waits for the rest of it and is read together with it. If the
+    // two together fit nothing, the new chord is read on its own.
+    const fitOf = (value) => L.classifyStroke({
+      chord: value,
+      candidates: state.candidates,
+      all: state.all,
+      strokeIdx: state.strokeIdx,
+    });
+    let used = state.partial ? state.partial | chord : chord;
+    let fitted = fitOf(used);
+    if (!fitted && state.partial) {
+      used = chord;
+      fitted = fitOf(used);
+    }
+    state.partial = 0;
     // A wrong stroke (or an undo) is only previewed while it is held; once let go the preview
     // falls back to the strokes already typed right.
-    if (matches.length === 0) state.previewBits = 0;
+    if (!fitted || fitted.type === 'partial') state.previewBits = 0;
 
-    if (matches.length === 0 && chord === UNDO) {
+    if (chord === UNDO && (!fitted || fitted.type === 'partial')) {
       // As in Plover, * on its own is undo. It removes the last wrong attempt and nothing else,
       // so strokes already typed right are kept.
       if (state.failures.length === 0) {
@@ -997,42 +1024,57 @@
       return;
     }
 
-    if (matches.length === 0) {
-      // The mistake stays on screen as red text. The word waits on this stroke until it is
-      // typed right once. Strokes already typed right are kept.
-      const target = currentStroke();
-      // Accuracy is forgiving per word: however many wrong attempts a word takes, it counts
-      // as one inaccuracy for the word, not one per attempt.
-      state.wordMisses = 1;
-      state.wordWrongChords += 1;
-      // Blame only the keys that were wrong (missed or extra), not the whole stroke, so one
-      // slip on a key doesn't also count against the keys pressed correctly beside it.
-      L.recordChord(state.progress, S.namesInBits((target ^ chord) & target || target), ms, false);
-      // Only the latest mistake is ever shown or undoable - repeating the same wrong chord,
-      // or making a different one, replaces it rather than piling on top of it. There is
-      // never more than one live mistake to track at once.
-      state.failures = [chord];
-      setFeedback(
-        `Needs ${S.displayStroke(target)}. You pressed ${S.displayStroke(chord)}. ` +
-          `Press * (T key) to undo.`,
-        'bad',
-      );
+    if (fitted && fitted.type === 'partial') {
+      state.partial = used;
+      setFeedback(`Keep going: ${S.displayStroke(used)} is part of ${nextStrokes().join(' or ')}.`, '');
       refresh();
       return;
     }
 
-    L.recordChord(state.progress, S.namesInBits(chord), ms, true);
-    state.failures = [];
-    state.candidates = matches;
-    state.strokeIdx += 1;
-    state.doneStrokes.push(chord);
-    state.previewBits = 0;
-    setFeedback('Good', 'good');
-    if (matches.some((strokes) => strokes.length === state.strokeIdx)) {
-      wordDone();
-    } else {
-      refresh();
+    if (fitted) {
+      // The next stroke, or the first stroke of a spelling: the word is being redone from the start,
+      // so the strokes typed before are replaced by this one.
+      L.recordChord(state.progress, S.namesInBits(used), ms, true);
+      state.failures = [];
+      state.previewBits = 0;
+      if (fitted.type === 'restart') {
+        state.doneStrokes = [used];
+        state.strokeIdx = 1;
+        setFeedback('Starting the word again.', 'good');
+      } else {
+        state.doneStrokes.push(used);
+        state.strokeIdx += 1;
+        setFeedback('Good', 'good');
+      }
+      state.candidates = fitted.matches;
+      if (state.candidates.some((strokes) => strokes.length === state.strokeIdx)) {
+        wordDone();
+      } else {
+        refresh();
+      }
+      return;
     }
+
+    // A real mistake: the stroke fits no spelling. It stays on screen as red text, listing every
+    // stroke the word could need next, and the word waits until one of them is typed right.
+    const target = currentStroke();
+    // Accuracy is forgiving per word: however many wrong attempts a word takes, it counts
+    // as one inaccuracy for the word, not one per attempt.
+    state.wordMisses = 1;
+    state.wordWrongChords += 1;
+    // Blame only the keys that were wrong (missed or extra), not the whole stroke, so one
+    // slip on a key doesn't also count against the keys pressed correctly beside it.
+    L.recordChord(state.progress, S.namesInBits((target ^ used) & target || target), ms, false);
+    // Only the latest mistake is ever shown or undoable - repeating the same wrong chord,
+    // or making a different one, replaces it rather than piling on top of it. There is
+    // never more than one live mistake to track at once.
+    state.failures = [used];
+    const needed = nextStrokes().map((stroke) => `- ${stroke}`).join('\n');
+    setFeedback(
+      `Needs\n${needed}\nYou pressed ${S.displayStroke(used)}\nPress * (T key) to undo.`,
+      'bad',
+    );
+    refresh();
   }
 
   let unlockToastTimer = null;
