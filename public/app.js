@@ -80,6 +80,24 @@
     $("hints").checked = state.hints;
   }
 
+  // Which steno theory the lessons use. Each one has its own folder of data: Plover's sits at
+  // data/, Lapwing's under data/lapwing/ (built by scripts/build-theory.js). Saved in this
+  // browser; switching reloads the page so the lessons start from the new word list.
+  const THEORY_KEY = "steno-lessions.theory";
+  const THEORIES = {
+    plover: { label: "Plover", dir: "data/" },
+    lapwing: { label: "Lapwing", dir: "data/lapwing/" },
+  };
+  function readTheory() {
+    try {
+      const value = localStorage.getItem(THEORY_KEY);
+      return value in THEORIES ? value : "plover";
+    } catch {
+      return "plover";
+    }
+  }
+  const theory = readTheory();
+
   // [flag in progress.scaffolds, matching checkbox id], ordered least -> most consequential.
   const SCAFFOLD_BOXES = [
     ['labels', 'show-labels'],
@@ -242,7 +260,7 @@
   async function loadFullResolver() {
     let dict;
     try {
-      dict = await getJson('data/dictionary.json');
+      dict = await getJson(THEORIES[theory].dir + 'dictionary.json');
     } catch {
       return;
     }
@@ -1198,12 +1216,27 @@
     // The layout and dictionary are hardcoded data, the same on a plain static host (e.g.
     // GitHub Pages) as behind server.js, so there's exactly one place to load them from.
     try {
-      state.data = await getJson('data/bundle.json');
+      state.data = await getJson(THEORIES[theory].dir + 'bundle.json');
     } catch (error) {
       $('error').hidden = false;
       $('error').textContent = `Could not load steno data: ${error.message}`;
+      if (theory !== 'plover') {
+        $('error').textContent += `. The ${THEORIES[theory].label} data is built locally: run node scripts/build-theory.js ${theory} <folder with its JSON files>, then reload. Until then, switch the Theory back to Plover.`;
+      }
       return;
     }
+    const theoryPicker = $('theory');
+    theoryPicker.innerHTML = Object.entries(THEORIES)
+      .map(([id, { label }]) => `<option value="${id}">${label}</option>`).join('');
+    theoryPicker.value = theory;
+    theoryPicker.addEventListener('change', (event) => {
+      try {
+        localStorage.setItem(THEORY_KEY, event.target.value);
+      } catch {
+        // Without storage the choice still applies, but the next visit starts on Plover
+      }
+      location.reload();
+    });
     // Progress still has two homes: server.js's /api/progress when it's there to answer, or
     // this browser's localStorage on a static host with no server at all.
     try {

@@ -21,6 +21,23 @@ Settings come from environment variables:
 | `STENO_LESSIONS_DATA` | `progress.json` in the project folder (git-ignored) | Where progress is saved |
 | `PORT` | `4321` | Port to listen on |
 
+## Theories: Plover and Lapwing
+
+The header has a Theory dropdown. Plover is the default; Lapwing uses the same keys and layout
+with its own dictionary. The choice is saved in this browser, and switching reloads the page.
+
+Lapwing's data is built from its JSON dictionaries, which you download from
+[plover-lapwing-aio](https://github.com/aerickt/plover-lapwing-aio/tree/main/plover_lapwing/dictionaries):
+
+```sh
+node scripts/build-theory.js lapwing <folder with the downloaded .json files>
+```
+
+This writes `public/data/lapwing/`, which is git-ignored (it's about 8 MB and generated), so the
+GitHub Pages site shows Plover only until you build and publish that folder yourself. Lapwing's inflected forms (such as `accorded` and `arranging`)
+live in its `.modal` rule files, which this app can't read, so those words aren't in the Lapwing
+word list. About 11% of the words Plover covers are missing from it.
+
 ## Hosting it statically (e.g. GitHub Pages)
 
 `public/` is already a complete static site — `server.js` only adds a place to save progress
