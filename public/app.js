@@ -227,8 +227,8 @@
   const currentWord = () => state.queue[0];
   // The stroke sequence to show: the first one that is still possible
   const shownStrokes = () => state.candidates[0] || [];
-  // Every stroke the word could need next, one per spelling, shown once each
-  const nextStrokes = () => [...new Set(state.candidates.map((seq) => seq[state.strokeIdx]).filter(Boolean))]
+  // Every stroke that would be right now: continuing the spellings still possible, or starting the word over
+  const nextStrokes = () => L.nextOptions({ candidates: state.candidates, all: state.all, strokeIdx: state.strokeIdx })
     .map((bits) => S.displayStroke(bits));
   const currentStroke = () => shownStrokes()[state.strokeIdx] || 0;
   const unlockedMask = () => L.unlockedMask(state.progress, state.slotIndex);

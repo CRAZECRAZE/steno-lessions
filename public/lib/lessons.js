@@ -614,6 +614,15 @@
     return partOfNext ? { type: 'partial' } : null;
   }
 
+  // Every stroke that would be right now, shown once each: the next stroke of each spelling still
+  // possible, then (once the word is under way) the first stroke of every spelling, since the
+  // word can be started over with any of them.
+  function nextOptions({ candidates, all, strokeIdx }) {
+    const next = candidates.map((seq) => seq[strokeIdx]);
+    const restart = strokeIdx > 0 ? all.map((seq) => seq[0]) : [];
+    return [...new Set([...next, ...restart])].filter(Boolean);
+  }
+
   // 0 (fully accurate) to 1 (always wrong): how much a key's own weakness should pull word
   // selection toward it. Deliberately the *raw* accuracy deficit, not `confidence` - confidence
   // normalizes accuracy against KEY_ACCURACY_TARGET (0.8) and multiplies in a speed term that
@@ -882,6 +891,7 @@
     KEY_ORDER,
     START_KEYS,
     classifyStroke,
+    nextOptions,
     LESSON_SIZE,
     ACCURACY_TARGET,
     KEY_ACCURACY_TARGET,

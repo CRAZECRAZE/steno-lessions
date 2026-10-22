@@ -43,6 +43,19 @@ test('a stroke with a key the next stroke does not use is a real mistake', () =>
   assert.equal(lessons.classifyStroke({ chord: A | C, candidates, all: candidates, strokeIdx: 0 }), null);
 });
 
+test('after a first stroke, the options are the continuation and every way to start over', () => {
+  // abuse in Lapwing: PW-AOU-S, or A then PW-AOU-S. Having typed A, the word can continue with
+  // PW-AOU-S, or start over with A or PW-AOU-S.
+  const all = [[A | B], [A, B | C]];
+  const options = lessons.nextOptions({ candidates: [[A, B | C]], all, strokeIdx: 1 });
+  assert.deepEqual(options, [B | C, A | B, A]);
+});
+
+test('before anything is typed, the options are just the first strokes', () => {
+  const all = [[A | B], [A, B | C]];
+  assert.deepEqual(lessons.nextOptions({ candidates: all, all, strokeIdx: 0 }), [A | B, A]);
+});
+
 test('a stroke that fits nothing is a real mistake', () => {
   const candidates = [[A, B]];
   assert.equal(lessons.classifyStroke({ chord: D, candidates, all: candidates, strokeIdx: 0 }), null);
