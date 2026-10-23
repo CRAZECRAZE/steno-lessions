@@ -566,6 +566,8 @@ body.paused #practice .feedback {
   z-index: 1;
 }
 .key.spacer { visibility: hidden; }
+/* A big key covers two columns and both rows, with one sound centred in it */
+.key.big.steno .main.sound { top: 50%; transform: translateY(-50%); }
 /* A tall key repeats its sound and letter for the lower half, where the lower single key had
    them, and moves the upper half's letter up to where the upper single key had it. */
 .key.tall .main.sound.lower { top: calc(var(--kh) + var(--gap) + 6px); }

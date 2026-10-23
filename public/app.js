@@ -15,18 +15,19 @@
   // below leaves a `gap` where its lower half is), `bar` is the slim number bar. `letters` are
   // the key names shown on it; a tall key shows its sound and letter once per half, exactly
   // where the two single keys would have them.
-  const merged = (codes, letters, { span, tall, bar } = {}) => ({ label: letters[0], codes, letters, span, tall, bar });
+  const merged = (codes, letters, { span, tall, bar, big } = {}) => ({ label: letters[0], codes, letters, span, tall, bar, big });
   const gap = { spacer: true };
   const NUMBER_CODES = [...'1234567890'].map((digit) => `Digit${digit}`);
   const ROWS = [
     [sym('`', '~'), merged(NUMBER_CODES, [...'1234567890'], { span: 10, bar: true }), sym('-', '_'),
       sym('=', '+'), named('Backspace', 'Backspace', 'w2')],
-    // Q and A are both S-, T and G are both *: one tall key each, spanning both rows
+    // Q and A are both S-: one tall key, spanning both rows. T, Y, G and H are all *: one big
+    // key covering two columns and both rows
     [named('Tab', 'Tab', 'w15'), merged(['KeyQ', 'KeyA'], ['Q', 'A'], { tall: true }),
-      ...'WER'.split('').map(letter), merged(['KeyT', 'KeyG'], ['T', 'G'], { tall: true }),
-      ...'YUIOP'.split('').map(letter), sym('[', '{'), sym(']', '}'), sym('\\', '|', 'w15')],
-    [named('Caps Lock', 'CapsLock', 'w15'), gap, ...'SDF'.split('').map(letter), gap,
-      ...'HJKL'.split('').map(letter), sym(';', ':'), sym("'", '"'), named('Enter', 'Enter', 'w225')],
+      ...'WER'.split('').map(letter), merged(['KeyT', 'KeyY', 'KeyG', 'KeyH'], ['T', 'Y', 'G', 'H'], { span: 2, tall: true, big: true }),
+      ...'UIOP'.split('').map(letter), sym('[', '{'), sym(']', '}'), sym('\\', '|', 'w15')],
+    [named('Caps Lock', 'CapsLock', 'w15'), gap, ...'SDF'.split('').map(letter), gap, gap,
+      ...'JKL'.split('').map(letter), sym(';', ':'), sym("'", '"'), named('Enter', 'Enter', 'w225')],
     [named('Shift', 'ShiftLeft', 'w225'), ...'ZXCVBNM'.split('').map(letter), sym(',', '<'),
       sym('.', '>'), sym('/', '?'), named('Shift', 'ShiftRight', 'w25')],
     [named('Ctrl', 'ControlLeft', 'w15'), named('Alt', 'AltLeft', 'w15'),
@@ -330,6 +331,7 @@
         el.dataset.code = code;
         if (key.width) el.classList.add(key.width);
         if (key.tall) el.classList.add('tall');
+        if (key.big) el.classList.add('big');
         if (key.bar) el.classList.add('bar');
         if (key.span) el.style.width = `calc(var(--u) * ${key.span} + var(--gap) * ${key.span - 1})`;
         if (fingerByCode.has(code)) el.dataset.finger = fingerByCode.get(code);
@@ -353,6 +355,17 @@
               digits.appendChild(cell);
             }
             el.appendChild(digits);
+            addSound(false);
+          } else if (key.big) {
+            // One big sound in the middle. Its letters are named in two lines: the upper
+            // row's keys above, the lower row's keys below
+            const letters = key.letters;
+            [letters.slice(0, letters.length / 2), letters.slice(letters.length / 2)].forEach((names, half) => {
+              const letterEl = document.createElement('span');
+              letterEl.className = `letter${half ? ' lower' : ''}`;
+              letterEl.textContent = names.join('  ');
+              el.appendChild(letterEl);
+            });
             addSound(false);
           } else {
             (key.letters || [info.label]).forEach((text, half) => {
