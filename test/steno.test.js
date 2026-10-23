@@ -101,10 +101,10 @@ test('keyGroup puts left-hand keys (star included), vowels, and right-hand keys 
   assert.deepEqual(groups, ['left', 'left', 'middle', 'left', 'middle', 'middle', 'right', 'right', '']);
 });
 
-test('displayOrder puts the star after the left-hand keys, before the vowels', () => {
-  assert.deepEqual(steno.displayOrder(steno.namesInBits(steno.parseStroke('SKWRAO*EUF'))),
-    ['S-', 'K-', 'W-', 'R-', '*', 'A-', 'O-', '-E', '-U', '-F']);
+test('displayOrder reads #STKPWHRAO*EUFRPBLGTSDZ, with the number key first', () => {
+  assert.deepEqual(steno.displayOrder(steno.namesInBits(steno.parseStroke('#SKWRAO*EUF'))), ['#', 'S-', 'K-', 'W-', 'R-', 'A-', 'O-', '*', '-E', '-U', '-F']);
 });
+
 
 test('buildNumberWords makes every one-stroke number, in steno order, using the # key', () => {
   const words = steno.buildNumberWords();
