@@ -11,16 +11,16 @@ O-     C      o
 *      T      *
 -E     N      e
 -U     M      u
--F     Y      f
--R     H      r
--P     U      p
--B     J      b
--L     I      l
--G     K      g
--T     O      t
--S     L      s
--D     P      d
--Z     ;      z
+-F     U      f
+-R     J      r
+-P     I      p
+-B     K      b
+-L     O      l
+-G     L      g
+-T     P      t
+-S     ;      s
+-D     [      d
+-Z     '      z
 #      1      #
 -E+-U  ,      e + u
 A-+O-  V      a + o
