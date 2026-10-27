@@ -1372,6 +1372,21 @@
   }
 
   async function init() {
+    // The keyboard-diagram picker: QWERTY or the Uni v4. A pure render switch - no reload,
+    // no data change, so it can move freely mid-lesson. Wired before the data load so it
+    // keeps working even when the bundle fails to load.
+    const kbdPicker = $('kbd-picker');
+    kbdPicker.value = state.kbd;
+    kbdPicker.addEventListener('change', (event) => {
+      state.kbd = event.target.value;
+      try {
+        localStorage.setItem(KBD_KEY, state.kbd);
+      } catch {
+        // Without storage the choice still applies, but the next visit starts on QWERTY
+      }
+      renderKeyboard();
+      refresh();
+    });
     // The layout and dictionary are hardcoded data, the same on a plain static host (e.g.
     // GitHub Pages) as behind server.js, so there's exactly one place to load them from.
     const ready = Object.fromEntries(await Promise.all(
@@ -1466,20 +1481,6 @@
     });
     L.switchLevel(state.progress, L.levelFor(state.progress.scaffolds, state.hints));
     applyScaffoldBoxes();
-    // The keyboard-diagram picker: QWERTY or the Uni v4. A pure render switch - no reload,
-    // no data change, so it can move freely mid-lesson.
-    const kbdPicker = $('kbd-picker');
-    kbdPicker.value = state.kbd;
-    kbdPicker.addEventListener('change', (event) => {
-      state.kbd = event.target.value;
-      try {
-        localStorage.setItem(KBD_KEY, state.kbd);
-      } catch {
-        // Without storage the choice still applies, but the next visit starts on QWERTY
-      }
-      renderKeyboard();
-      refresh();
-    });
     for (const [flag, id] of SCAFFOLD_BOXES) {
       $(id).addEventListener('change', (event) => {
         state.progress.scaffolds[flag] = event.target.checked;

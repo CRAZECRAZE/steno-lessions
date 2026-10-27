@@ -655,11 +655,11 @@ body.paused #practice .feedback {
 .uni-half.left { grid-template-columns: repeat(5, var(--u)); }
 .uni-half.right { grid-template-columns: repeat(6, var(--u)); }
 /* Uni keys are colored by steno group (left orange / vowels blue / right purple), matching
-   the stream's sound coloring - the QWERTY diagram's per-finger colors don't exist on a
-   machine. The # keys have no group and keep the plain steno tint. */
-.keyboard.uni .key.steno[data-group="left"] { --finger: #ffac4d; }
-.keyboard.uni .key.steno[data-group="middle"] { --finger: #5bb0ff; }
-.keyboard.uni .key.steno[data-group="right"] { --finger: #c78bff; }
+   the stream's sound coloring via the same theme vars - the QWERTY diagram's per-finger
+   colors don't exist on a machine. The # keys have no group and keep the plain steno tint. */
+.keyboard.uni .key.steno[data-group="left"] { --finger: var(--left-ink); }
+.keyboard.uni .key.steno[data-group="middle"] { --finger: var(--middle-ink); }
+.keyboard.uni .key.steno[data-group="right"] { --finger: var(--right-ink); }
 /* Locked Uni keys read as bare keycaps: the sound stays hidden until the key unlocks. */
 .keyboard.uni .key.steno.locked .main.sound { visibility: hidden; }
 /* The scaffold collapse (see .keyboard.empty above) also takes the Uni halves away. */
