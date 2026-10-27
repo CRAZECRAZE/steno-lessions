@@ -29,13 +29,15 @@
     'X19', 'X20', 'X21', 'X22', 'X23', 'X24', 'X25', 'X26',
   ];
 
-  // The report carries the whole lever state as one 8-byte big-endian number (after the
-  // report id). It is a snapshot sent on every state change, not a stream of down/up
-  // events, so 64 bits need BigInt.
-  function parseHidState(bytes) {
-    if (!bytes || bytes.length < 9 || bytes[0] !== REPORT_ID) return null;
+  // The report carries the whole lever state as one 8-byte big-endian number. It is a
+  // snapshot sent on every state change, not a stream of down/up events, so 64 bits need
+  // BigInt. The report id arrives separately - Plover's hidapi reads include it as the
+  // first byte, but a browser's WebHID strips it into event.reportId - so the caller
+  // passes the id it saw and the payload it got, and this checks the pairing.
+  function parseHidState(reportId, payload) {
+    if (reportId !== REPORT_ID || !payload || payload.length < 8) return null;
     let state = 0n;
-    for (let i = 1; i <= 8; i++) state = (state << 8n) | BigInt(bytes[i] & 0xff);
+    for (let i = 0; i < 8; i++) state = (state << 8n) | BigInt(payload[i] & 0xff);
     return state;
   }
 
