@@ -1385,6 +1385,8 @@
     // Already connected: reopening the picker would only invite a second open() rejection
     // or a second listener on the same device.
     if (uniDevice) return;
+    const button = $('connect-uni');
+    button.disabled = true;
     try {
       const [device] = await navigator.hid.requestDevice({ filters: [{ usagePage: U.USAGE_PAGE, usage: U.USAGE }] });
       if (!device) { setFeedback('No Uni selected.', 'bad'); return; }
@@ -1396,6 +1398,8 @@
       setFeedback('Uni v4 connected. Its keys type here; QWERTY still works too.', 'good');
     } catch (error) {
       setFeedback(`Could not connect the Uni v4: ${error.message}`, 'bad');
+    } finally {
+      button.disabled = false;
     }
   }
 
@@ -1428,7 +1432,15 @@
     // With more than one device ever connected, an older device's goodbye must not end the
     // newer one's connection.
     if (uniDevice && event.device && event.device !== uniDevice) return;
+    // The device object survives its own disconnect event, so take the listeners back off
+    // it - a reconnected device would otherwise stack a second copy of each handler.
+    event.device.removeEventListener('inputreport', onUniReport);
+    event.device.removeEventListener('disconnect', onUniDisconnect);
     uniDevice = null;
+    // The machine's half of a held chord can never finish now - take its bits back out of
+    // the shared chord space, so a later QWERTY release doesn't score levers that are no
+    // longer on the desk. Any QWERTY keys still held keep building their chord.
+    state.chordBits &= ~U.strokeBits([...state.uniPressed]);
     state.uniPressed.clear();
     setUniStatus('');
     setFeedback('Uni v4 disconnected. QWERTY typing still works.', 'bad');
@@ -1473,6 +1485,9 @@
       renderKeyboard();
       refresh();
     });
+    // Show the persisted diagram right away - the first data-driven render is only after
+    // the bundle fetches, and a saved Uni v4 choice should not flash the QWERTY board.
+    renderKeyboard();
     // The Uni v4 connect button, also wired before the data load: connecting the machine
     // has no dependency on the bundle, and the button should say so even when it fails.
     setupUni();

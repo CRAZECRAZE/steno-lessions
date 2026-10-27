@@ -36,25 +36,6 @@ test('CHART is Plover HID STENO_KEY_CHART, verbatim', () => {
   ]);
 });
 
-test('Plover HID constants match the protocol', () => {
-  assert.strictEqual(U.USAGE_PAGE, 0xFF50);
-  assert.strictEqual(U.USAGE, 0x4C56);
-  assert.strictEqual(U.REPORT_ID, 0x50);
-});
-
-test('CHART is Plover HID STENO_KEY_CHART, verbatim', () => {
-  assert.deepStrictEqual([...U.CHART], [
-    'S1-', 'T-', 'K-', 'P-', 'W-', 'H-', 'R-', 'A-',
-    'O-', '*1', '-E', '-U', '-F', '-R', '-P', '-B',
-    '-L', '-G', '-T', '-S', '-D', '-Z', '#1', 'S2-',
-    '*2', '*3', '*4', '#2', '#3', '#4', '#5', '#6',
-    '#7', '#8', '#9', '#A', '#B', '#C', 'X1', 'X2',
-    'X3', 'X4', 'X5', 'X6', 'X7', 'X8', 'X9', 'X10',
-    'X11', 'X12', 'X13', 'X14', 'X15', 'X16', 'X17', 'X18',
-    'X19', 'X20', 'X21', 'X22', 'X23', 'X24', 'X25', 'X26',
-  ]);
-});
-
 test('chartKeys reads chart names from the MSB down', () => {
   assert.deepStrictEqual(U.chartKeys(1n << 63n), ['S1-']);
   assert.deepStrictEqual(U.chartKeys((1n << 63n) | (1n << 62n)), ['S1-', 'T-']);
@@ -110,17 +91,6 @@ test('UNI_KEYS pins every key to its physical position', () => {
 
 // Every position pinned, so a swapped pair anywhere on the board fails the suite, not just
 // the two keys spot-checked above.
-test('UNI_KEYS pins every key to its physical position', () => {
-  assert.deepStrictEqual(U.UNI_KEYS.map((k) => [k.name, k.half, k.row, k.col]), [
-    ['S1-', 'L', 0, 0], ['T-', 'L', 0, 1], ['P-', 'L', 0, 2], ['H-', 'L', 0, 3], ['*1', 'L', 0, 4],
-    ['*3', 'R', 0, 0], ['-F', 'R', 0, 1], ['-P', 'R', 0, 2], ['-L', 'R', 0, 3], ['-T', 'R', 0, 4], ['-D', 'R', 0, 5],
-    ['S2-', 'L', 1, 0], ['K-', 'L', 1, 1], ['W-', 'L', 1, 2], ['R-', 'L', 1, 3], ['*2', 'L', 1, 4],
-    ['*4', 'R', 1, 0], ['-R', 'R', 1, 1], ['-B', 'R', 1, 2], ['-G', 'R', 1, 3], ['-S', 'R', 1, 4], ['-Z', 'R', 1, 5],
-    ['#1', 'L', 2, 2], ['A-', 'L', 2, 3], ['O-', 'L', 2, 4],
-    ['-E', 'R', 2, 0], ['-U', 'R', 2, 1], ['#2', 'R', 2, 2],
-  ]);
-});
-
 test('hintNames renders steno display names in display order', () => {
   const aBit = 1 << S.SLOTS.findIndex(([, name]) => name === 'A-');
   const tBit = 1 << S.SLOTS.findIndex(([, name]) => name === '-T');
