@@ -264,8 +264,10 @@
     .map((bits) => S.displayStroke(bits));
   const currentStroke = () => shownStrokes()[state.strokeIdx] || 0;
   const unlockedMask = () => L.unlockedMask(state.progress, state.slotIndex);
-  // The steno keys held right now, as a stroke mask
-  const heldBits = () => [...state.pressed].reduce((bits, code) => bits | (state.infoByCode.get(code)?.bits || 0), 0);
+  // The steno keys held right now, as a stroke mask - from the QWERTY keys and, once a
+  // machine is connected, from the Uni v4 levers held at the same moment.
+  const heldBits = () => [...state.pressed].reduce((bits, code) => bits | (state.infoByCode.get(code)?.bits || 0), 0)
+    | U.strokeBits([...state.uniPressed]);
 
   function setFeedback(text, kind) {
     const el = $('feedback');
@@ -1282,6 +1284,7 @@
   // Drops the chord being typed and stops the word clock, so time away from the page is not counted
   function clearChord() {
     state.pressed.clear();
+    state.uniPressed.clear();
     state.chordBits = 0;
     state.lastChordEnd = null;
     for (const timer of state.releaseTimers.values()) clearTimeout(timer);
@@ -1335,7 +1338,7 @@
     const info = state.infoByCode.get(event.code);
     if (!info) return;
     event.preventDefault();
-    if (state.pressed.size === 0) {
+    if (state.pressed.size === 0 && state.uniPressed.size === 0) {
       // A fresh stroke starts clean: finishChord already zeroed state.chordBits and cleared
       // every error visual the instant the last one was let go, so there is nothing left over
       // here to hide. The failures state is untouched, so undo (*)
@@ -1353,11 +1356,85 @@
     const timer = setTimeout(() => {
       state.releaseTimers.delete(event.code);
       state.pressed.delete(event.code);
-      if (state.pressed.size === 0) finishChord();
+      // The chord is over only when both input sources are empty - a Uni chord still held
+      // while the last QWERTY key comes up (or the reverse) keeps building.
+      if (state.pressed.size === 0 && state.uniPressed.size === 0) finishChord();
       renderChord();
     }, RELEASE_DEBOUNCE_MS);
     state.releaseTimers.set(event.code, timer);
   });
+
+  // The Uni v4 (Plover HID firmware) speaks its state over WebHID: every state change is
+  // one report - report id 0x50, then 8 bytes of a 64-bit lever bitmask. A stroke is the
+  // state going non-empty and then back to all-zero, which mirrors finishChord's
+  // last-key-up model. Reports are snapshots, so each non-zero report is OR-ed into the
+  // chord: a lever that went down and up mid-stroke is kept, exactly like Plover's own
+  // accumulation. Plover itself keeps reading the same device - on Linux, hidraw hands a
+  // copy of every report to each reader - so the machine can stay connected to both.
+  let uniDevice = null;
+  function setUniStatus(text) { $('uni-status').textContent = text; }
+
+  async function connectUni() {
+    if (!navigator.hid) {
+      setFeedback('The Uni v4 needs a Chromium browser (Chrome, Edge, Chromium) for WebHID.', 'bad');
+      return;
+    }
+    try {
+      const [device] = await navigator.hid.requestDevice({ filters: [{ usagePage: U.USAGE_PAGE, usage: U.USAGE }] });
+      if (!device) { setFeedback('No Uni selected.', 'bad'); return; }
+      await device.open();
+      uniDevice = device;
+      device.addEventListener('inputreport', onUniReport);
+      device.addEventListener('disconnect', onUniDisconnect);
+      setUniStatus('connected');
+      setFeedback('Uni v4 connected. Its keys type here; QWERTY still works too.', 'good');
+    } catch (error) {
+      setFeedback(`Could not connect the Uni v4: ${error.message}`, 'bad');
+    }
+  }
+
+  function onUniReport(event) {
+    // WebHID strips the report id into event.reportId (Plover's hidapi reads keep it as
+    // the first data byte) - pass both halves to the parser separately.
+    const payload = new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength);
+    const state64 = U.parseHidState(event.reportId, payload);
+    if (state64 === null) return;
+    if (state.paused) { if (state64 !== 0n) resume(); else return; }
+    const levers = U.chartKeys(state64);
+    if (state64 === 0n) {
+      state.uniPressed.clear();
+      // The all-zero report is the chord's release. The chordBits guard keeps a stray or
+      // repeated zero report (connect while keys rest half-pressed) from fabricating a
+      // stroke out of nothing.
+      if (state.pressed.size === 0 && state.chordBits !== 0) finishChord();
+    } else {
+      if (state.pressed.size === 0 && state.uniPressed.size === 0) {
+        state.chordBits = 0;
+        state.chordStart = performance.now();
+      }
+      for (const name of levers) state.uniPressed.add(name);
+      state.chordBits |= U.strokeBits(levers);
+    }
+    renderChord();
+  }
+
+  function onUniDisconnect() {
+    uniDevice = null;
+    state.uniPressed.clear();
+    setUniStatus('');
+    setFeedback('Uni v4 disconnected. QWERTY typing still works.', 'bad');
+    renderChord();
+  }
+
+  function setupUni() {
+    const button = $('connect-uni');
+    if (!navigator.hid) {
+      button.disabled = true;
+      setUniStatus('Needs a Chromium browser');
+      return;
+    }
+    button.addEventListener('click', connectUni);
+  }
 
   window.addEventListener('blur', () => { clearChord(); pause(); });
   document.addEventListener('visibilitychange', () => {
@@ -1466,6 +1543,7 @@
     loadFullResolver();
     buildKeyboard();
     buildUniKeyboard();
+    setupUni();
     applyHints();
     $("hints").addEventListener("change", (event) => {
       state.hints = event.target.checked;
