@@ -1,5 +1,7 @@
 # [▶ Open steno-lessions](https://noahlyk.github.io/steno-lessions/)
 
+*A fork of [steno-lessions](https://github.com/noahlyk/steno-lessions) by noahlyk — this fork adds [Uni v4](https://stenokeyboards.com/products/the-uni-v4) machine support: a diagram of the board and real input over WebHID (Plover HID), alongside the original QWERTY typing. See [the design doc](docs/superpowers/specs/2026-10-26-uni-v4-design.md).*
+
 Learn steno one key at a time, the way keybr and monkeytype teach typing. You type on your normal keyboard. The page turns your key presses into steno strokes, and the keyboard shows which keys are steno keys and what sound each one makes.
 
 The layout and dictionary are hardcoded into `public/data/bundle.json` — no external program or dictionary install needed, and the same data is used whether you run the page through `server.js` or open it as plain static files (e.g. GitHub Pages).
