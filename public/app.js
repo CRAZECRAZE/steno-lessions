@@ -648,7 +648,10 @@
         // preview keeps showing that stroke's resolution (state.previewBits) until the next
         // one starts replacing it, live, key by key.
         // A stroke still waiting for its rest (state.partial) stays in the preview while it is completed.
-        const held = state.pressed.size > 0 ? state.partial | state.chordBits : state.partial || state.previewBits;
+        // "Held" spans both input sources: a chord held only on the Uni v4 is just as live.
+        const held = state.pressed.size > 0 || state.uniPressed.size > 0
+          ? state.partial | state.chordBits
+          : state.partial || state.previewBits;
         // Strokes of this word already typed right stay put, in order, ahead of the stroke
         // being held (TKAT then A reads "dat" and keeps "dat" once TKAT is let go).
         const shown = L.previewFor({
@@ -1379,6 +1382,9 @@
       setFeedback('The Uni v4 needs a Chromium browser (Chrome, Edge, Chromium) for WebHID.', 'bad');
       return;
     }
+    // Already connected: reopening the picker would only invite a second open() rejection
+    // or a second listener on the same device.
+    if (uniDevice) return;
     try {
       const [device] = await navigator.hid.requestDevice({ filters: [{ usagePage: U.USAGE_PAGE, usage: U.USAGE }] });
       if (!device) { setFeedback('No Uni selected.', 'bad'); return; }
@@ -1418,7 +1424,10 @@
     renderChord();
   }
 
-  function onUniDisconnect() {
+  function onUniDisconnect(event) {
+    // With more than one device ever connected, an older device's goodbye must not end the
+    // newer one's connection.
+    if (uniDevice && event.device && event.device !== uniDevice) return;
     uniDevice = null;
     state.uniPressed.clear();
     setUniStatus('');
@@ -1464,6 +1473,9 @@
       renderKeyboard();
       refresh();
     });
+    // The Uni v4 connect button, also wired before the data load: connecting the machine
+    // has no dependency on the bundle, and the button should say so even when it fails.
+    setupUni();
     // The layout and dictionary are hardcoded data, the same on a plain static host (e.g.
     // GitHub Pages) as behind server.js, so there's exactly one place to load them from.
     const ready = Object.fromEntries(await Promise.all(
@@ -1543,7 +1555,6 @@
     loadFullResolver();
     buildKeyboard();
     buildUniKeyboard();
-    setupUni();
     applyHints();
     $("hints").addEventListener("change", (event) => {
       state.hints = event.target.checked;
