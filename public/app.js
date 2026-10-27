@@ -5,6 +5,7 @@
   const S = window.StenoData;
   const L = window.StenoLessons;
   const D = window.StenoDrills;
+  const U = window.UniV4;
 
   // The full keyboard, row by row. `label` is the key's main character. `shift` is the
   // character shown when Shift is held. Keys with a `code` are named keys (Shift, Tab, ...).
@@ -80,6 +81,19 @@
   function applyHints() {
     document.body.classList.toggle("hints-off", !state.hints);
     $("hints").checked = state.hints;
+  }
+
+  // Which keyboard diagram the page shows: the QWERTY board (how the lessons were played
+  // before there was a machine) or the Uni v4, drawn in its real split-ortholinear shape.
+  // Diagram choice only - typing works on either, QWERTY keys always and the machine once
+  // it is connected. Saved in this browser.
+  const KBD_KEY = "steno-lessions.kbd";
+  function readKbd() {
+    try {
+      return localStorage.getItem(KBD_KEY) === "uni" ? "uni" : "qwerty";
+    } catch {
+      return "qwerty";
+    }
   }
 
   // Which steno theory the lessons use. Each one has its own folder of data: Plover's sits at
@@ -204,6 +218,9 @@
     // first word(s) of the next stretch get the slow entrance animation instead of just appearing
     breakTimer: null,
     releaseTimers: new Map(), // event.code -> pending debounced-release timeout id
+    kbd: readKbd(), // which keyboard diagram is shown: 'qwerty' or 'uni'
+    uniKeyEls: new Map(), // Uni diagram key element -> the lever name it stands for
+    uniPressed: new Set(), // Uni v4 lever names held right now (machine input, see Task 3)
     typed: 0, // words finished this session
     pressed: new Set(),
     chordBits: 0,
@@ -307,8 +324,10 @@
   }
 
   // The physical keys to press for a stroke, using combined keys where they fit, so the
-  // hint reads like the chord on the keyboard (e.g. "V" for A- and O-).
+  // hint reads like the chord on the keyboard (e.g. "V" for A- and O-). In Uni v4 mode
+  // the hint is the steno key names instead - on the machine, the key IS the steno key.
   function keysFor(bits) {
+    if (state.kbd === 'uni') return U.hintNames(bits);
     const keys = state.data.layout.keys
       .filter((key) => key.bits && (key.bits & ~bits) === 0)
       .sort((a, b) => S.popcount(b.bits) - S.popcount(a.bits));
@@ -409,6 +428,46 @@
     });
   }
 
+  // The Uni v4 drawn as it physically is: a unibody split board, two key rows and a thumb
+  // row, left half five columns and right half six. Keys are placed by U.UNI_KEYS, so the
+  // diagram is the machine, not an approximation of one. Sounds and colors come from the
+  // loaded theory bundle and the steno groups, like the stream's sound coloring.
+  function buildUniKeyboard() {
+    if (!state.data) return;
+    const board = $('uni-keyboard');
+    board.textContent = '';
+    const soundOf = new Map(state.data.layout.slots.map((slot) => [slot.name, slot.sound]));
+    for (const half of ['L', 'R']) {
+      const halfEl = document.createElement('div');
+      halfEl.className = `uni-half ${half === 'L' ? 'left' : 'right'}`;
+      const columns = half === 'L' ? 5 : 6;
+      for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < columns; col++) {
+          const key = U.UNI_KEYS.find((k) => k.half === half && k.row === row && k.col === col);
+          const el = document.createElement('div');
+          if (!key) {
+            // A gap in the grid (the thumb row's empty corners) is a spacer, invisible
+            el.className = 'key spacer';
+            halfEl.appendChild(el);
+            continue;
+          }
+          el.className = 'key steno';
+          el.dataset.group = S.keyGroup(key.slot) || 'plain';
+          const sound = document.createElement('span');
+          sound.className = 'main sound';
+          sound.textContent = soundOf.get(key.slot) || '';
+          const letter = document.createElement('span');
+          letter.className = 'letter';
+          letter.textContent = S.displayName(key.slot);
+          el.append(sound, letter);
+          state.uniKeyEls.set(el, key.name);
+          halfEl.appendChild(el);
+        }
+      }
+      board.appendChild(halfEl);
+    }
+  }
+
   // Prestige scaffold fading: least-consequential first. Each stage only ever changes a
   // *default* - the matching checkbox (state.progress.scaffolds.{labels,target,keyboard}, on
   // by default) always wins, so nothing is ever taken away with no way to restore it.
@@ -426,13 +485,25 @@
     document.body.classList.toggle('scaffold-labels-off', !labelsOn);
     // Most consequential scaffold: off collapses the keyboard to an empty box (its rows
     // removed, not merely dimmed), so there's no half-visible crutch to lean on.
+    // The active diagram - QWERTY or the Uni v4 - is the one that collapses; the other is
+    // hidden whole ('off'), since only one keyboard is on the page at a time.
+    const uniOn = state.kbd === 'uni';
+    $('keyboard').classList.toggle('off', uniOn);
+    $('uni-keyboard').classList.toggle('off', !uniOn);
     $('keyboard').classList.toggle('empty', !keyboardOn);
+    $('uni-keyboard').classList.toggle('empty', !keyboardOn);
     for (const [el, codes] of state.keyEls) {
       const info = state.infoByCode.get(codes[0]);
       el.classList.toggle('steno', Boolean(info));
       el.classList.toggle('locked', Boolean(info) && (info.bits & ~mask) !== 0);
       el.classList.toggle('target', state.hints && targetOn && Boolean(info) && target !== 0 && (info.bits & target) === info.bits);
       el.classList.toggle('down', codes.some((code) => state.pressed.has(code)));
+    }
+    for (const [el, name] of state.uniKeyEls) {
+      const bits = U.strokeBits([name]);
+      el.classList.toggle('locked', (bits & ~mask) !== 0);
+      el.classList.toggle('target', state.hints && targetOn && target !== 0 && (bits & target) === bits);
+      el.classList.toggle('down', state.uniPressed.has(name));
     }
   }
 
@@ -1379,6 +1450,7 @@
     buildStrokeIndex(state.data.words);
     loadFullResolver();
     buildKeyboard();
+    buildUniKeyboard();
     applyHints();
     $("hints").addEventListener("change", (event) => {
       state.hints = event.target.checked;
@@ -1394,6 +1466,20 @@
     });
     L.switchLevel(state.progress, L.levelFor(state.progress.scaffolds, state.hints));
     applyScaffoldBoxes();
+    // The keyboard-diagram picker: QWERTY or the Uni v4. A pure render switch - no reload,
+    // no data change, so it can move freely mid-lesson.
+    const kbdPicker = $('kbd-picker');
+    kbdPicker.value = state.kbd;
+    kbdPicker.addEventListener('change', (event) => {
+      state.kbd = event.target.value;
+      try {
+        localStorage.setItem(KBD_KEY, state.kbd);
+      } catch {
+        // Without storage the choice still applies, but the next visit starts on QWERTY
+      }
+      renderKeyboard();
+      refresh();
+    });
     for (const [flag, id] of SCAFFOLD_BOXES) {
       $(id).addEventListener('change', (event) => {
         state.progress.scaffolds[flag] = event.target.checked;
