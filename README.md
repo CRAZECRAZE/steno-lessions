@@ -65,6 +65,19 @@ Keep your keyboard in its normal mode. The page reads the keys as you press them
 
 Keys are taken over only when they are steno keys. Ctrl, Alt and Meta combos, and every other key, go to the browser and the system as usual.
 
+## The Uni v4
+
+The Keyboard picker in the header switches the diagram between your QWERTY keyboard and the Uni v4, drawn as the machine really is: a unibody split board, two key rows and a thumb row, all 28 keys in their real places (`S- T- P- H- ★ ★ -F -P -L -T -D` over `S- K- W- R- ★ ★ -R -B -G -S -Z` over `# A- O- -E -U #`). Everything else works the same on it: keys unlock in the same order, locked keys sit dark with no sound, the target stroke is highlighted, and held keys light up — the exact physical key, including which of the split S or star keys you pressed. In Uni v4 mode the "keys to press" line under each word shows steno key names (`A -T`) instead of QWERTY letters (`C P`), because on the machine the key *is* the steno key.
+
+To type on the machine itself, click **Connect Uni v4** under the keyboard. The board speaks the Plover HID protocol, and the page reads it over WebHID, so:
+
+- Use a Chromium browser (Chrome, Edge, Chromium — Firefox and Safari have no WebHID; the button tells you).
+- Plover can stay connected to the board the whole time — on Linux every reader of the device gets a copy of each report. You do not have to disconnect anything.
+- Consider turning Plover's Output off while practicing: with it on, Plover types its translations into whatever window has focus.
+- QWERTY typing keeps working exactly as before, alongside machine input.
+
+If the board is unplugged mid-lesson the page says so and carries on on the keyboard. Your progress is unaffected either way: the lesson engine tracks steno keys, not physical keys, so the same progress counts on both inputs.
+
 ## How to practice
 
 - A stroke is a chord. Hold every key for it at once, then release them all. The stroke is scored when the last key comes up, so the keys can land in any order.
